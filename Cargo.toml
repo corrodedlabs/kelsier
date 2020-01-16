@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 winit = "0.20.0"
 ash   = "0.29.0"
+error-chain = "0.12.1"
