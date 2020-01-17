@@ -13,9 +13,11 @@ use super::swapchain;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 
-struct Device {
+use std::ffi::{CStr, CString};
+
+pub struct Device {
     physical_device: vk::PhysicalDevice,
-    logical_device: vk::Device,
+    logical_device: ash::Device,
 }
 
 struct QueueFamilyIndices {
@@ -23,11 +25,11 @@ struct QueueFamilyIndices {
     present: Option<u32>,
 }
 
-struct DeviceExtension {
+pub struct DeviceExtension {
     pub names: [&'static str; 1],
 }
 
-const DEVICE_EXTENSIONS: DeviceExtension = DeviceExtension {
+pub const DEVICE_EXTENSIONS: DeviceExtension = DeviceExtension {
     names: ["VK_KHR_swapchain"],
 };
 
@@ -123,9 +125,88 @@ impl Device {
             .ok_or(anyhow!("failed to find a gpu"))
     }
 
-    // fn create_logical_device(
-    // 	instance: &ash::Instance,
-    // 	physical_device: vk::PhysicalDevice,
-    // 	validation:
-    // )
+    fn create_logical_device(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        surface_info: &surface::SurfaceInfo,
+    ) -> Result<ash::Device> {
+        let indices = queue::FamilyIndices::new(instance, physical_device, surface_info);
+        let unique_families = indices.get_unique();
+
+        let queue_priorities = [1.0_f32];
+
+        let queue_create_infos: Vec<vk::DeviceQueueCreateInfo> = unique_families
+            .iter()
+            .map(|queue_family| vk::DeviceQueueCreateInfo {
+                s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
+                p_next: std::ptr::null(),
+                flags: vk::DeviceQueueCreateFlags::empty(),
+                queue_family_index: *queue_family,
+                p_queue_priorities: queue_priorities.as_ptr(),
+                queue_count: queue_priorities.len() as u32,
+            })
+            .collect();
+
+        let physical_device_features = vk::PhysicalDeviceFeatures {
+            sampler_anisotropy: vk::TRUE,
+            ..Default::default()
+        };
+
+        let extension_names = &DEVICE_EXTENSIONS.get_raw_names();
+
+        // let enabled_layers = EnabledLayers::query();
+
+        let raw_enabled_layer_names: Vec<CString> = VALIDATION_LAYER
+            .iter()
+            .map(|layer_name| CString::new(*layer_name).unwrap())
+            .collect();
+
+        let enabled_layer_names: Vec<*const i8> = raw_enabled_layer_names
+            .iter()
+            .map(|layer_name| layer_name.as_ptr())
+            .collect();
+
+        let layers = EnabledLayers {
+            count: if ENABLE_VALIDATION {
+                enabled_layer_names.len()
+            } else {
+                0
+            } as u32,
+            names: if ENABLE_VALIDATION {
+                enabled_layer_names.as_ptr()
+            } else {
+                &std::ptr::null()
+            },
+        };
+
+        let device_create_info = vk::DeviceCreateInfo {
+            s_type: vk::StructureType::DEVICE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::DeviceCreateFlags::empty(),
+            queue_create_info_count: queue_create_infos.len() as u32,
+            p_queue_create_infos: queue_create_infos.as_ptr(),
+            enabled_layer_count: layers.count,
+            pp_enabled_layer_names: layers.names,
+            enabled_extension_count: extension_names.len() as u32,
+            pp_enabled_extension_names: extension_names.as_ptr(),
+            p_enabled_features: &physical_device_features,
+        };
+
+        unsafe {
+            instance
+                .create_device(physical_device, &device_create_info, None)
+                .context("failed to create logical device")
+        }
+    }
+
+    pub fn new(instance: &ash::Instance, surface_info: &surface::SurfaceInfo) -> Result<Device> {
+        let physical_device = Device::pick_physical_device(instance, surface_info)?;
+
+        Device::create_logical_device(instance, physical_device, surface_info).map(
+            |logical_device| Device {
+                physical_device,
+                logical_device,
+            },
+        )
+    }
 }

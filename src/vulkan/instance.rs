@@ -125,7 +125,10 @@ impl VulkanInstance {
         // Debug utils extension also requested here
         let extension_names = platforms::required_extension_names();
 
-        // CString vec should be in scope for the ptr conversion
+        println!("enabled layer {:?}", VALIDATION_LAYER);
+
+        // let enabled_layers = EnabledLayers::query();
+
         let raw_enabled_layer_names: Vec<CString> = VALIDATION_LAYER
             .iter()
             .map(|layer_name| CString::new(*layer_name).unwrap())
@@ -136,7 +139,18 @@ impl VulkanInstance {
             .map(|layer_name| layer_name.as_ptr())
             .collect();
 
-        println!("enabled layer {:?}", VALIDATION_LAYER);
+        let layers = EnabledLayers {
+            count: if ENABLE_VALIDATION {
+                enabled_layer_names.len()
+            } else {
+                0
+            } as u32,
+            names: if ENABLE_VALIDATION {
+                enabled_layer_names.as_ptr()
+            } else {
+                &std::ptr::null()
+            },
+        };
 
         let create_info = vk::InstanceCreateInfo {
             s_type: vk::StructureType::INSTANCE_CREATE_INFO,
@@ -144,20 +158,13 @@ impl VulkanInstance {
                 &debug_utils_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT
                     as *const c_void
             } else {
-                ptr::null()
+                std::ptr::null()
             },
+
             flags: vk::InstanceCreateFlags::empty(),
             p_application_info: &app_info,
-            pp_enabled_layer_names: if ENABLE_VALIDATION {
-                enabled_layer_names.as_ptr()
-            } else {
-                ptr::null()
-            },
-            enabled_layer_count: if ENABLE_VALIDATION {
-                enabled_layer_names.len()
-            } else {
-                0
-            } as u32,
+            pp_enabled_layer_names: layers.names,
+            enabled_layer_count: layers.count,
             pp_enabled_extension_names: extension_names.as_ptr(),
             enabled_extension_count: extension_names.len() as u32,
         };

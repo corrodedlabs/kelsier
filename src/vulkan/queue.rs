@@ -52,4 +52,14 @@ impl FamilyIndices {
     pub fn is_available(&self) -> bool {
         self.graphics.is_some() && self.present.is_some()
     }
+
+    pub fn get_unique(&self) -> std::collections::HashSet<u32> {
+        if self.is_available() {
+            vec![self.graphics.unwrap(), self.present.unwrap()]
+                .into_iter()
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        }
+    }
 }

@@ -18,6 +18,7 @@ use std::{
 use kelsier::foreign;
 use kelsier::platforms;
 use kelsier::vulkan::constants::*;
+use kelsier::vulkan::device;
 use kelsier::vulkan::instance;
 use kelsier::vulkan::surface;
 
@@ -80,6 +81,8 @@ impl VulkanApp {
     pub fn setup(&self, window: &winit::window::Window) -> Result<()> {
         let surface_info =
             surface::SurfaceInfo::new(&self.instance, window, WINDOW_WIDTH, WINDOW_HEIGHT)?;
+
+        let device = device::Device::new(&self.instance.instance, &surface_info)?;
 
         Ok(())
     }
