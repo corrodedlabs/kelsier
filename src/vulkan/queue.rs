@@ -1,6 +1,9 @@
+use super::device;
 use super::surface;
+
 use ash::vk;
 
+use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 
 pub struct FamilyIndices {
@@ -61,5 +64,28 @@ impl FamilyIndices {
         } else {
             std::collections::HashSet::new()
         }
+    }
+}
+
+pub struct Queue {
+    pub graphics: vk::Queue,
+    pub present: vk::Queue,
+}
+
+impl Queue {
+    pub fn new(device: device::Device) -> Queue {
+        let graphics = unsafe {
+            device
+                .logical_device
+                .get_device_queue(device.family_indices.graphics.unwrap(), 0)
+        };
+
+        let present = unsafe {
+            device
+                .logical_device
+                .get_device_queue(device.family_indices.present.unwrap(), 0)
+        };
+
+        Queue { graphics, present }
     }
 }

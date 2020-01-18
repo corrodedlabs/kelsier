@@ -20,6 +20,7 @@ use kelsier::platforms;
 use kelsier::vulkan::constants::*;
 use kelsier::vulkan::device;
 use kelsier::vulkan::instance;
+use kelsier::vulkan::queue;
 use kelsier::vulkan::surface;
 
 use anyhow::{Context, Result};
@@ -83,6 +84,8 @@ impl VulkanApp {
             surface::SurfaceInfo::new(&self.instance, window, WINDOW_WIDTH, WINDOW_HEIGHT)?;
 
         let device = device::Device::new(&self.instance.instance, &surface_info)?;
+
+        let queue = queue::Queue::new(device);
 
         Ok(())
     }

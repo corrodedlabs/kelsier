@@ -16,13 +16,9 @@ use anyhow::{Context, Result};
 use std::ffi::{CStr, CString};
 
 pub struct Device {
-    physical_device: vk::PhysicalDevice,
-    logical_device: ash::Device,
-}
-
-struct QueueFamilyIndices {
-    graphics: Option<u32>,
-    present: Option<u32>,
+    pub physical_device: vk::PhysicalDevice,
+    pub logical_device: ash::Device,
+    pub family_indices: queue::FamilyIndices,
 }
 
 pub struct DeviceExtension {
@@ -129,7 +125,7 @@ impl Device {
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         surface_info: &surface::SurfaceInfo,
-    ) -> Result<ash::Device> {
+    ) -> Result<(ash::Device, queue::FamilyIndices)> {
         let indices = queue::FamilyIndices::new(instance, physical_device, surface_info);
         let unique_families = indices.get_unique();
 
@@ -197,15 +193,17 @@ impl Device {
                 .create_device(physical_device, &device_create_info, None)
                 .context("failed to create logical device")
         }
+        .map(|device| (device, indices))
     }
 
     pub fn new(instance: &ash::Instance, surface_info: &surface::SurfaceInfo) -> Result<Device> {
         let physical_device = Device::pick_physical_device(instance, surface_info)?;
 
         Device::create_logical_device(instance, physical_device, surface_info).map(
-            |logical_device| Device {
+            |(logical_device, family_indices)| Device {
                 physical_device,
                 logical_device,
+                family_indices,
             },
         )
     }
