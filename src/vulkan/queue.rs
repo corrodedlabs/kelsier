@@ -73,7 +73,7 @@ pub struct Queue {
 }
 
 impl Queue {
-    pub fn new(device: device::Device) -> Queue {
+    pub fn new(device: &device::Device) -> Queue {
         let graphics = unsafe {
             device
                 .logical_device

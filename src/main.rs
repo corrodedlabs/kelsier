@@ -22,6 +22,7 @@ use kelsier::vulkan::device;
 use kelsier::vulkan::instance;
 use kelsier::vulkan::queue;
 use kelsier::vulkan::surface;
+use kelsier::vulkan::swapchain;
 
 use anyhow::{Context, Result};
 
@@ -85,7 +86,15 @@ impl VulkanApp {
 
         let device = device::Device::new(&self.instance.instance, &surface_info)?;
 
-        let queue = queue::Queue::new(device);
+        let queue = queue::Queue::new(&device);
+
+        let swapchain = swapchain::SwapchainDetails::new(
+            &self.instance.instance,
+            &device,
+            window,
+            &device.family_indices,
+            &surface_info,
+        )?;
 
         Ok(())
     }
