@@ -1,4 +1,5 @@
 use ash::extensions::khr::Swapchain;
+use ash::version::DeviceV1_0;
 use ash::vk;
 
 use super::device;
@@ -48,6 +49,7 @@ pub struct SwapchainDetails {
     pub images: Vec<vk::Image>,
     pub format: vk::SurfaceFormatKHR,
     pub extent: vk::Extent2D,
+    pub image_views: Vec<vk::ImageView>,
 }
 
 impl SwapchainDetails {
@@ -80,6 +82,40 @@ impl SwapchainDetails {
         //  min(capabilities.maxImageExtent.width, actualExtent.width));
         //  actualExtent comes from window dimension
         support_detail.capabilities.current_extent
+    }
+
+    fn create_image_view(
+        device: &ash::Device,
+        image: vk::Image,
+        format: vk::Format,
+        aspect_flags: vk::ImageAspectFlags,
+        mip_levels: u32,
+    ) -> Result<vk::ImageView> {
+        let imageview_info = vk::ImageViewCreateInfo {
+            view_type: vk::ImageViewType::TYPE_2D,
+            format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY,
+            },
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: aspect_flags,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1,
+            },
+            image,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_image_view(&imageview_info, None)
+                .context("Failed to create image view")
+        }
     }
 
     pub fn new(
@@ -137,17 +173,32 @@ impl SwapchainDetails {
                 .context("failed to create swapchain")
         }?;
 
-        unsafe {
+        let images = unsafe {
             swapchain_loader
                 .get_swapchain_images(swapchain)
                 .context("failed to get swapchain images")
-        }
-        .map(|images| SwapchainDetails {
+        }?;
+
+        let image_views = images
+            .iter()
+            .flat_map(|&image| {
+                SwapchainDetails::create_image_view(
+                    &device.logical_device,
+                    image,
+                    surface_format.format,
+                    vk::ImageAspectFlags::COLOR,
+                    1,
+                )
+            })
+            .collect::<Vec<vk::ImageView>>();
+
+        Ok(SwapchainDetails {
             loader: swapchain_loader,
             swapchain,
             images,
             format: surface_format,
             extent,
+            image_views,
         })
     }
 }
