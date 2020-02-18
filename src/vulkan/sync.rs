@@ -26,8 +26,8 @@ impl FrameState {
     }
 }
 
-pub struct Objects<'a> {
-    pub device: &'a ash::Device,
+pub struct Objects {
+    pub device: ash::Device,
     pub swapchain_details: swapchain::SwapchainDetails,
     pub queue: queue::Queue,
     pub buffers: buffers::BufferDetails,
@@ -42,9 +42,9 @@ pub struct Objects<'a> {
     pub frame_state: FrameState,
 }
 
-impl Objects<'_> {
+impl Objects {
     pub fn new(
-        device: &ash::Device,
+        device: ash::Device,
         queue: queue::Queue,
         swapchain_details: swapchain::SwapchainDetails,
         buffers: buffers::BufferDetails,
@@ -187,6 +187,8 @@ impl Objects<'_> {
     }
 
     pub fn draw_next_frame(&mut self) -> Result<()> {
+        println!("drawing frame");
+
         let in_flight_fence = self
             .in_flight_fences
             .get(self.frame_state.current_frame)
@@ -244,7 +246,7 @@ impl Objects<'_> {
     }
 }
 
-impl Iterator for Objects<'_> {
+impl Iterator for Objects {
     type Item = Result<()>;
 
     fn next(&mut self) -> Option<Self::Item> {

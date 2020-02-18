@@ -15,15 +15,11 @@ use std::{
     ptr,
 };
 
-use kelsier::foreign;
-use kelsier::platforms;
-use kelsier::vulkan::buffers;
-use kelsier::vulkan::constants::*;
-use kelsier::vulkan::device;
-use kelsier::vulkan::instance;
-use kelsier::vulkan::queue;
-use kelsier::vulkan::surface;
-use kelsier::vulkan::swapchain;
+use kelsier::{
+    app, foreign, platforms, shaderc,
+    vulkan::constants::*,
+    vulkan::{buffers, device, instance, pipeline, queue, surface, swapchain, sync},
+};
 
 use anyhow::{Context, Result};
 
@@ -45,7 +41,12 @@ impl VulkanApp {
             .context("failed to create window")
     }
 
-    pub fn run_game_loop(self, event_loop: EventLoop<()>, window: Window) -> Result<()> {
+    pub fn run_game_loop(
+        self,
+        event_loop: EventLoop<()>,
+        window: Window,
+        mut frame: sync::Objects,
+    ) -> Result<()> {
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
@@ -74,14 +75,18 @@ impl VulkanApp {
                 Event::MainEventsCleared => window.request_redraw(),
 
                 // todo draw frame on this
-                Event::RedrawRequested(_window_id) => (),
+                Event::RedrawRequested(_window_id) => {
+                    match frame.next().transpose() {
+                        _ => (),
+                    };
+                }
 
                 _ => (),
             }
         });
     }
 
-    pub fn setup(&self, window: &winit::window::Window) -> Result<()> {
+    pub fn setup(&self, window: &winit::window::Window) -> Result<sync::Objects> {
         let surface_info =
             surface::SurfaceInfo::new(&self.instance, window, WINDOW_WIDTH, WINDOW_HEIGHT)?;
 
@@ -97,7 +102,34 @@ impl VulkanApp {
             &surface_info,
         )?;
 
-        Ok(())
+        let shaders = shaderc::ShaderSource {
+            vertex_shader_file: "shaders/shader.vert".to_string(),
+            fragment_shader_file: "shaders/shader.frag".to_string(),
+        };
+
+        let pipeline_detail = pipeline::PipelineDetail::create_graphics_pipeline(
+            &device.logical_device,
+            &swapchain,
+            shaders,
+            app::VERTICES[0],
+        )?;
+
+        let device_memory_properties = unsafe {
+            self.instance
+                .instance
+                .get_physical_device_memory_properties(device.physical_device)
+        };
+        let buffer_details = buffers::BufferDetails::new(
+            &device,
+            &device_memory_properties,
+            queue.graphics,
+            pipeline_detail,
+            &swapchain,
+            app::VERTICES.to_vec(),
+            app::INDICES.to_vec(),
+        )?;
+
+        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 4)
     }
 
     pub fn new() -> Result<VulkanApp> {
@@ -110,7 +142,7 @@ fn main() -> Result<()> {
     let event_loop = EventLoop::new();
     let window = VulkanApp::init_window(&event_loop).expect("cannot create window");
 
-    app.setup(&window)?;
+    let frame = app.setup(&window)?;
 
-    app.run_game_loop(event_loop, window)
+    app.run_game_loop(event_loop, window, frame)
 }

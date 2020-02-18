@@ -1,3 +1,4 @@
+pub mod app;
 pub mod foreign;
 pub mod platforms;
 

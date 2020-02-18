@@ -8,12 +8,15 @@ use anyhow::{Context, Result};
 
 use crate::shaderc;
 
+use super::swapchain;
+
 pub struct PipelineDetail {
     pub pipeline: vk::Pipeline,
     pub layout: vk::PipelineLayout,
+    pub render_pass: vk::RenderPass,
 }
 
-pub trait VertexData {
+pub trait VertexData<T = Self> {
     fn get_input_binding_description(&self) -> Vec<vk::VertexInputBindingDescription>;
     fn get_attribute_description(&self) -> Vec<vk::VertexInputAttributeDescription>;
 }
@@ -91,11 +94,13 @@ impl PipelineDetail {
 
     pub fn create_graphics_pipeline(
         device: &ash::Device,
-        extent: vk::Extent2D,
-        surface_format: vk::Format,
+        swapchain: &swapchain::SwapchainDetails,
         shaders: shaderc::ShaderSource,
         vertex_data: impl VertexData,
     ) -> Result<PipelineDetail> {
+        let extent = swapchain.extent;
+        let surface_format = swapchain.format.format;
+
         let compiled_shaders = shaders.compile()?;
 
         let vert_shader_module =
@@ -228,6 +233,7 @@ impl PipelineDetail {
         Ok(PipelineDetail {
             pipeline: pipelines[0],
             layout: pipeline_layout,
+            render_pass,
         })
     }
 }

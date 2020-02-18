@@ -1,4 +1,4 @@
-[package]
+	[package]
 name = "kelsier"
 version = "0.1.0"
 authors = ["Akash Shakdwipeea <ashakdwipeea@gmail.com>"]
@@ -12,3 +12,4 @@ ash   = "0.29.0"
 error-chain = "0.12.1"
 anyhow = "1.0"
 shaderc = "0.6"
+memoffset = "0.5"
