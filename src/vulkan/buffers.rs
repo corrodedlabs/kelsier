@@ -169,7 +169,7 @@ impl BufferDetails {
         )?;
 
         let command_pool =
-            BufferDetails::create_command_pool(logical_device, device.family_indices)?;
+            BufferDetails::create_command_pool(logical_device, &device.family_indices)?;
 
         let command_buffers = BufferDetails::create_command_buffers(
             logical_device,
