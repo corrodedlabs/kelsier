@@ -5,7 +5,7 @@ use winit::{
 };
 
 use ash::{
-    version::{EntryV1_0, InstanceV1_0},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk, vk_make_version,
 };
 
@@ -77,9 +77,20 @@ impl VulkanApp {
                 // todo draw frame on this
                 Event::RedrawRequested(_window_id) => {
                     match frame.next().transpose() {
-                        _ => (),
+                        Ok(_) => (),
+                        Err(e) => {
+                            println!("Error occurred: {}", e);
+                            panic!(e)
+                        }
                     };
                 }
+
+                Event::LoopDestroyed => unsafe {
+                    frame
+                        .device
+                        .device_wait_idle()
+                        .expect("failed to wait evice idele!")
+                },
 
                 _ => (),
             }
@@ -101,6 +112,7 @@ impl VulkanApp {
             &device.family_indices,
             &surface_info,
         )?;
+        println!("swapchain created");
 
         let shaders = shaderc::ShaderSource {
             vertex_shader_file: "shaders/shader.vert".to_string(),
@@ -113,6 +125,7 @@ impl VulkanApp {
             shaders,
             app::VERTICES[0],
         )?;
+        println!("pipeline created");
 
         let device_memory_properties = unsafe {
             self.instance
@@ -128,8 +141,9 @@ impl VulkanApp {
             app::VERTICES.to_vec(),
             app::INDICES.to_vec(),
         )?;
+        println!("buffers created");
 
-        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 4)
+        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 8)
     }
 
     pub fn new() -> Result<VulkanApp> {
@@ -142,7 +156,12 @@ fn main() -> Result<()> {
     let event_loop = EventLoop::new();
     let window = VulkanApp::init_window(&event_loop).expect("cannot create window");
 
-    let frame = app.setup(&window)?;
+    let frame = match app.setup(&window) {
+        Ok(obj) => obj,
+        Err(e) => {
+            panic!(e);
+        }
+    };
 
     app.run_game_loop(event_loop, window, frame)
 }

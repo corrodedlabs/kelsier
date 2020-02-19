@@ -131,7 +131,8 @@ impl SwapchainDetails {
         let present_mode = SwapchainDetails::choose_present_mode(support)?;
         let extent = SwapchainDetails::choose_swap_extent(support);
 
-        let image_count = support.capabilities.min_image_count;
+        let image_count = support.capabilities.max_image_count;
+        println!("swapchain image count: {}", image_count);
 
         let (image_sharing_mode, queue_family_index_count, queue_family_indices) =
             if family_indices.graphics != family_indices.present {

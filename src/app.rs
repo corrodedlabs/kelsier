@@ -38,19 +38,27 @@ impl pipeline::VertexData for VertexData {
         // so we're only going to have one binding.
         [vk::VertexInputBindingDescription {
             binding: 0,
-            stride: ::std::mem::size_of::<Self>() as u32,
+            stride: ::std::mem::size_of::<VertexData>() as u32,
             input_rate: vk::VertexInputRate::VERTEX,
         }]
         .to_vec()
     }
 
     fn get_attribute_description(&self) -> Vec<vk::VertexInputAttributeDescription> {
-        [vk::VertexInputAttributeDescription {
-            binding: 0,
-            location: 0,
-            format: vk::Format::R32G32B32A32_SFLOAT,
-            offset: offset_of!(Self, pos) as u32,
-        }]
+        [
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 0,
+                format: vk::Format::R32G32B32A32_SFLOAT,
+                offset: offset_of!(VertexData, pos) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 1,
+                format: vk::Format::R32G32B32_SFLOAT,
+                offset: offset_of!(VertexData, color) as u32,
+            },
+        ]
         .to_vec()
     }
 }

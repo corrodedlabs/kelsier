@@ -105,6 +105,7 @@ impl Objects {
 
     fn submit_buffers_to_queue(sync_objects: &Objects, acquired_image_index: u32) -> Result<()> {
         let current_frame = sync_objects.frame_state.current_frame as usize;
+        println!("submitting buffer for frame: {}", current_frame);
 
         let command_buffer = sync_objects
             .buffers
@@ -139,7 +140,7 @@ impl Objects {
             p_wait_dst_stage_mask: [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT].as_ptr(),
 
             command_buffer_count: 1u32,
-            p_command_buffers: [*command_buffer].as_ptr(),
+            p_command_buffers: command_buffer,
 
             signal_semaphore_count: signal_semaphores.len() as u32,
             p_signal_semaphores: signal_semaphores.as_ptr(),
@@ -158,10 +159,11 @@ impl Objects {
                 )
                 .context("failed to submit to graphics queue")
         }?;
+        println!("buffer submitted to graphics queue");
 
         let present_info = vk::PresentInfoKHR {
-            wait_semaphore_count: wait_semaphores.len() as u32,
-            p_wait_semaphores: wait_semaphores.as_ptr(),
+            wait_semaphore_count: signal_semaphores.len() as u32,
+            p_wait_semaphores: signal_semaphores.as_ptr(),
             swapchain_count: 1u32,
             p_swapchains: [sync_objects.swapchain_details.swapchain].as_ptr(),
             p_image_indices: &acquired_image_index,
@@ -221,6 +223,12 @@ impl Objects {
                 _ => anyhow!(format!("failed to acquire swapchain images: {}", err)),
             }
         })?;
+        println!(
+            "acquired image index is {}, current_frame is {}",
+            acquired_image_index, self.frame_state.current_frame,
+        );
+
+        println!("images in flight: {:?}", self.frame_state.images_in_flight);
 
         let image_in_flight = self
             .frame_state
@@ -230,17 +238,22 @@ impl Objects {
 
         image_in_flight
             .map(|image_in_flight| unsafe {
+                println!(
+                    "waiting for fence; acquired image index is {} ",
+                    acquired_image_index
+                );
                 self.device
                     .wait_for_fences(&[image_in_flight], true, std::u64::MAX)
                     .context("failed to wait for in flight fence")
             })
             .transpose()?;
+        self.frame_state.images_in_flight[acquired_image_index as usize] = Some(*in_flight_fence);
 
         Objects::submit_buffers_to_queue(self, acquired_image_index)?;
+        println!("buffer submitted for presentation");
 
         self.frame_state.current_frame =
-            (self.frame_state.current_frame + 1) % self.frames_in_flight as usize;
-        self.frame_state.images_in_flight[acquired_image_index as usize] = Some(*in_flight_fence);
+            ((self.frame_state.current_frame + 1) % self.frames_in_flight as usize) as usize;
 
         Ok(())
     }

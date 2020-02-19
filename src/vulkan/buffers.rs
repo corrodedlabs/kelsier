@@ -406,7 +406,7 @@ impl BufferDetails {
                 };
 
                 let vertex_buffers = [vertex_buffer.buffer];
-                let offsets = [0 as vk::DeviceSize];
+                let offsets = [0_u64];
 
                 // render pass
                 unsafe {
@@ -426,12 +426,12 @@ impl BufferDetails {
                     device.cmd_bind_index_buffer(
                         command_buffer,
                         index_buffer.buffer,
-                        0 as vk::DeviceSize,
-                        vk::IndexType::UINT16,
+                        0,
+                        vk::IndexType::UINT32,
                     );
 
                     // todo replace hard coded 6 with with index_buffer data size
-                    device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
+                    device.cmd_draw_indexed(command_buffer, 6u32, 1, 0, 0, 0);
 
                     device.cmd_end_render_pass(command_buffer);
                 }

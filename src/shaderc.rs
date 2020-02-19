@@ -12,8 +12,8 @@ pub struct ShaderSource {
 }
 
 pub struct CompiledShader {
-    pub vertex: Vec<u32>,
-    pub fragment: Vec<u32>,
+    pub vertex: Vec<u8>,
+    pub fragment: Vec<u8>,
 }
 
 impl ShaderSource {
@@ -29,6 +29,10 @@ impl ShaderSource {
     pub fn compile(&self) -> Result<CompiledShader> {
         let vertex_shader = ShaderSource::read_file(&self.vertex_shader_file)?;
         let fragment_shader = ShaderSource::read_file(&self.fragment_shader_file)?;
+        println!(
+            "shaders: vertex: {} fragment: {}",
+            vertex_shader, fragment_shader
+        );
 
         let mut compiler = shaderc::Compiler::new().context("cannot init shaderc compiler")?;
 
@@ -56,8 +60,8 @@ impl ShaderSource {
             .context("failed to compile fragment shader")?;
 
         Ok(CompiledShader {
-            vertex: vertex_shader_result.as_binary().to_vec(),
-            fragment: fragment_shader_result.as_binary().to_vec(),
+            vertex: vertex_shader_result.as_binary_u8().to_vec(),
+            fragment: fragment_shader_result.as_binary_u8().to_vec(),
         })
     }
 }

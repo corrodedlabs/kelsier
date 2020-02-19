@@ -1,4 +1,4 @@
-	[package]
+[package]
 name = "kelsier"
 version = "0.1.0"
 authors = ["Akash Shakdwipeea <ashakdwipeea@gmail.com>"]

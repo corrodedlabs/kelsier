@@ -22,7 +22,7 @@ pub trait VertexData<T = Self> {
 }
 
 impl PipelineDetail {
-    fn create_shader_module(device: &ash::Device, code: Vec<u32>) -> Result<vk::ShaderModule> {
+    fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> Result<vk::ShaderModule> {
         let shader_module_info = vk::ShaderModuleCreateInfo {
             code_size: code.len(),
             p_code: code.as_ptr() as *const u32,
@@ -101,7 +101,9 @@ impl PipelineDetail {
         let extent = swapchain.extent;
         let surface_format = swapchain.format.format;
 
+        println!("compiling shaders..");
         let compiled_shaders = shaders.compile()?;
+        println!("shaders compiled");
 
         let vert_shader_module =
             PipelineDetail::create_shader_module(device, compiled_shaders.vertex)?;
@@ -125,11 +127,19 @@ impl PipelineDetail {
             },
         ];
 
+        // ..enter
+        let binding_description = vertex_data.get_input_binding_description();
+        let attribute_description = vertex_data.get_attribute_description();
+        println!(
+            "descriptions {:?} {:?}",
+            binding_description, attribute_description
+        );
+
         let vertex_input_info = vk::PipelineVertexInputStateCreateInfo {
-            vertex_binding_description_count: 1,
-            p_vertex_binding_descriptions: vertex_data.get_input_binding_description().as_ptr(),
-            vertex_attribute_description_count: 1,
-            p_vertex_attribute_descriptions: vertex_data.get_attribute_description().as_ptr(),
+            vertex_binding_description_count: binding_description.len() as u32,
+            p_vertex_binding_descriptions: binding_description.as_ptr(),
+            vertex_attribute_description_count: attribute_description.len() as u32,
+            p_vertex_attribute_descriptions: attribute_description.as_ptr(),
             ..Default::default()
         };
 
@@ -218,6 +228,7 @@ impl PipelineDetail {
             ..Default::default()
         };
 
+        println!("going to create pipelines");
         let pipelines = unsafe {
             device
                 .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
