@@ -8,6 +8,8 @@ use super::buffers;
 use super::queue;
 use super::swapchain;
 
+use std::time::{Instant, SystemTime};
+
 pub struct FrameState {
     swapchain_image_index: u32,
     current_frame: usize,
@@ -26,11 +28,11 @@ impl FrameState {
     }
 }
 
-pub struct Objects {
+pub struct Objects<T: buffers::UniformBuffers> {
     pub device: ash::Device,
     pub swapchain_details: swapchain::SwapchainDetails,
     pub queue: queue::Queue,
-    pub buffers: buffers::BufferDetails,
+    pub buffers: buffers::BufferDetails<T>,
 
     pub frames_in_flight: u32,
 
@@ -38,18 +40,19 @@ pub struct Objects {
     pub render_finished_semaphores: Vec<vk::Semaphore>,
 
     pub in_flight_fences: Vec<vk::Fence>,
+    pub start_time: Instant,
 
     pub frame_state: FrameState,
 }
 
-impl Objects {
+impl<T: buffers::UniformBuffers> Objects<T> {
     pub fn new(
         device: ash::Device,
         queue: queue::Queue,
         swapchain_details: swapchain::SwapchainDetails,
-        buffers: buffers::BufferDetails,
+        buffers: buffers::BufferDetails<T>,
         frames_in_flight: u32,
-    ) -> Result<Objects> {
+    ) -> Result<Objects<T>> {
         let (image_available_semaphores, render_finished_semaphores) = (0..frames_in_flight)
             .into_iter()
             .map(|_| {
@@ -90,6 +93,8 @@ impl Objects {
             })
             .collect::<Result<Vec<vk::Fence>>>()?;
 
+        let start_time = Instant::now();
+
         Ok(Objects {
             device: device,
             queue,
@@ -99,11 +104,12 @@ impl Objects {
             image_available_semaphores,
             render_finished_semaphores,
             in_flight_fences,
+            start_time,
             frame_state: FrameState::default(frames_in_flight),
         })
     }
 
-    fn submit_buffers_to_queue(sync_objects: &Objects, acquired_image_index: u32) -> Result<()> {
+    fn submit_buffers_to_queue(sync_objects: &Objects<T>, acquired_image_index: u32) -> Result<()> {
         let current_frame = sync_objects.frame_state.current_frame as usize;
         println!("submitting buffer for frame: {}", current_frame);
 
@@ -161,11 +167,13 @@ impl Objects {
         }?;
         println!("buffer submitted to graphics queue");
 
+        let swapchains = [sync_objects.swapchain_details.swapchain];
+
         let present_info = vk::PresentInfoKHR {
             wait_semaphore_count: signal_semaphores.len() as u32,
             p_wait_semaphores: signal_semaphores.as_ptr(),
             swapchain_count: 1u32,
-            p_swapchains: [sync_objects.swapchain_details.swapchain].as_ptr(),
+            p_swapchains: swapchains.as_ptr(),
             p_image_indices: &acquired_image_index,
             ..Default::default()
         };
@@ -249,6 +257,22 @@ impl Objects {
             .transpose()?;
         self.frame_state.images_in_flight[acquired_image_index as usize] = Some(*in_flight_fence);
 
+        let delta_time = self.start_time.elapsed();
+        self.start_time = Instant::now();
+
+        println!("uniform buffers are {:?}", self.buffers.uniform_buffers);
+        let uniform_buffer = self
+            .buffers
+            .uniform_buffers
+            .get(acquired_image_index as usize)
+            .ok_or(anyhow!("could not find uniform buffer for the image"))?;
+
+        self.buffers.uniform_buffer_data.update_buffer(
+            &self.device,
+            uniform_buffer,
+            delta_time.subsec_micros() as f32 / 1000_000.0_f32,
+        )?;
+
         Objects::submit_buffers_to_queue(self, acquired_image_index)?;
         println!("buffer submitted for presentation");
 
@@ -259,7 +283,7 @@ impl Objects {
     }
 }
 
-impl Iterator for Objects {
+impl<T: buffers::UniformBuffers> Iterator for Objects<T> {
     type Item = Result<()>;
 
     fn next(&mut self) -> Option<Self::Item> {

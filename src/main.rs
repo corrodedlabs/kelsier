@@ -45,10 +45,10 @@ impl VulkanApp {
         self,
         event_loop: EventLoop<()>,
         window: Window,
-        mut frame: sync::Objects,
+        mut frame: sync::Objects<app::UniformBuffer>,
     ) -> Result<()> {
         event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
+            // *control_flow = ControlFlow::Wait;
 
             match event {
                 Event::WindowEvent { event, .. } => match event {
@@ -97,7 +97,10 @@ impl VulkanApp {
         });
     }
 
-    pub fn setup(&self, window: &winit::window::Window) -> Result<sync::Objects> {
+    pub fn setup(
+        &self,
+        window: &winit::window::Window,
+    ) -> Result<sync::Objects<app::UniformBuffer>> {
         let surface_info =
             surface::SurfaceInfo::new(&self.instance, window, WINDOW_WIDTH, WINDOW_HEIGHT)?;
 
@@ -127,6 +130,8 @@ impl VulkanApp {
         )?;
         println!("pipeline created");
 
+        let uniform_buffer_data = app::UniformBuffer::new(swapchain.extent);
+
         let device_memory_properties = unsafe {
             self.instance
                 .instance
@@ -140,6 +145,7 @@ impl VulkanApp {
             &swapchain,
             app::VERTICES.to_vec(),
             app::INDICES.to_vec(),
+            uniform_buffer_data,
         )?;
         println!("buffers created");
 

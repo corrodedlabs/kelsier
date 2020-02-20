@@ -124,6 +124,7 @@ impl CommandBuffer {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct BufferInfo {
     buffer: vk::Buffer,
     device_memory: vk::DeviceMemory,
@@ -309,15 +310,144 @@ impl BufferInfo {
     }
 }
 
-pub struct BufferDetails {
+pub trait UniformBuffers: Copy {
+    type Data;
+
+    fn create(
+        &self,
+        device: &ash::Device,
+        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
+    ) -> Result<BufferInfo> {
+        let buffer_size = ::std::mem::size_of::<Self::Data>() as vk::DeviceSize;
+        BufferInfo::create(
+            device,
+            buffer_size as vk::DeviceSize,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            device_memory_properties,
+        )
+    }
+
+    fn update(&mut self, delta_time: f32) -> ();
+
+    fn get_data(self) -> Self::Data;
+
+    fn update_buffer(
+        &mut self,
+        device: &ash::Device,
+        uniform_buffer: &BufferInfo,
+        delta_time: f32,
+    ) -> Result<()> {
+        let buffer_size = ::std::mem::size_of::<Self::Data>() as u64;
+
+        self.update(delta_time);
+        let data = [self.get_data()];
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    uniform_buffer.device_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .context("failed to map memory")? as *mut Self::Data;
+
+            data_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
+
+            device.unmap_memory(uniform_buffer.device_memory);
+        }
+
+        Ok(())
+    }
+
+    fn create_descriptor_pool(
+        &self,
+        device: &ash::Device,
+        pool_size_count: u32,
+    ) -> Result<vk::DescriptorPool> {
+        let pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: pool_size_count,
+        };
+
+        let pool_info = vk::DescriptorPoolCreateInfo {
+            pool_size_count: 1,
+            p_pool_sizes: &pool_size,
+            max_sets: pool_size_count,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_descriptor_pool(&pool_info, None)
+                .context("failed to create descriptor pool!")
+        }
+    }
+
+    fn create_descriptor_sets(
+        &self,
+        device: &ash::Device,
+        descriptor_layout: vk::DescriptorSetLayout,
+        uniform_buffers: &Vec<BufferInfo>,
+    ) -> Result<Vec<vk::DescriptorSet>> {
+        let num_sets = uniform_buffers.len();
+
+        let pool = self.create_descriptor_pool(device, num_sets as u32)?;
+        let layouts = vec![descriptor_layout; num_sets];
+
+        let alloc_info = vk::DescriptorSetAllocateInfo {
+            descriptor_pool: pool,
+            descriptor_set_count: num_sets as u32,
+            p_set_layouts: layouts.as_ptr(),
+            ..Default::default()
+        };
+
+        let descriptor_sets = unsafe {
+            device
+                .allocate_descriptor_sets(&alloc_info)
+                .context("failed to allocate descriptor sets")
+        }?;
+
+        uniform_buffers
+            .iter()
+            .zip(descriptor_sets)
+            .map(|(buffer, descriptor_set)| {
+                let buffer_info = [vk::DescriptorBufferInfo {
+                    buffer: buffer.buffer,
+                    offset: 0,
+                    range: ::std::mem::size_of::<Self::Data>() as u64,
+                }];
+
+                let descriptor_write = vk::WriteDescriptorSet {
+                    dst_set: descriptor_set,
+                    dst_binding: 0,
+                    dst_array_element: 0,
+                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    descriptor_count: 1,
+                    p_buffer_info: buffer_info.as_ptr(),
+                    ..Default::default()
+                };
+
+                unsafe { device.update_descriptor_sets(&[descriptor_write], &[]) };
+
+                Ok(descriptor_set)
+            })
+            .collect()
+    }
+}
+
+pub struct BufferDetails<T: UniformBuffers> {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
     pub command_buffers: Vec<vk::CommandBuffer>,
     pub vertex_buffer: VertexBuffer,
     pub index_buffer: IndexBuffer,
+    pub uniform_buffers: Vec<BufferInfo>,
+    pub uniform_buffer_data: T,
 }
 
-impl BufferDetails {
+impl<T: UniformBuffers> BufferDetails<T> {
     // todo should this fn be in swapchain module?
     fn create_framebuffers(
         device: &ash::Device,
@@ -376,6 +506,7 @@ impl BufferDetails {
         framebuffers: &Vec<vk::Framebuffer>,
         vertex_buffer: &VertexBuffer,
         index_buffer: &IndexBuffer,
+        descriptor_sets: Vec<vk::DescriptorSet>,
         render_pass: vk::RenderPass,
         surface_extent: vk::Extent2D,
     ) -> Result<Vec<vk::CommandBuffer>> {
@@ -407,6 +538,7 @@ impl BufferDetails {
 
                 let vertex_buffers = [vertex_buffer.buffer];
                 let offsets = [0_u64];
+                let descriptor_sets = [descriptor_sets[i]];
 
                 // render pass
                 unsafe {
@@ -429,6 +561,14 @@ impl BufferDetails {
                         0,
                         vk::IndexType::UINT32,
                     );
+                    device.cmd_bind_descriptor_sets(
+                        command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline.layout,
+                        0,
+                        &descriptor_sets,
+                        &[],
+                    );
 
                     // todo replace hard coded 6 with with index_buffer data size
                     device.cmd_draw_indexed(command_buffer, 6u32, 1, 0, 0, 0);
@@ -447,11 +587,17 @@ impl BufferDetails {
         swapchain_details: &swapchain::SwapchainDetails,
         vertex_data: Vec<impl pipeline::VertexData>,
         index_data: Vec<u32>,
-    ) -> Result<BufferDetails> {
+        uniform_buffer_data: T,
+    ) -> Result<BufferDetails<T>> {
         let logical_device = &device.logical_device;
         let render_pass = pipeline.render_pass;
 
-        let framebuffers = BufferDetails::create_framebuffers(
+        println!(
+            "num of swapchain images are: {}",
+            swapchain_details.image_views.len()
+        );
+
+        let framebuffers = BufferDetails::<T>::create_framebuffers(
             logical_device,
             render_pass,
             &swapchain_details.image_views,
@@ -459,7 +605,7 @@ impl BufferDetails {
         )?;
 
         let command_pool =
-            BufferDetails::create_command_pool(logical_device, &device.family_indices)?;
+            BufferDetails::<T>::create_command_pool(logical_device, &device.family_indices)?;
 
         let vertex_buffer = BufferInfo::create_vertex_buffer(
             &device.logical_device,
@@ -470,20 +616,31 @@ impl BufferDetails {
         )?;
 
         let index_buffer = BufferInfo::create_index_buffer(
-            &device.logical_device,
+            logical_device,
             device_memory_properties,
             command_pool,
             graphics_queue,
             index_data.as_slice(),
         )?;
 
-        let command_buffers = BufferDetails::create_command_buffers(
+        let uniform_buffers = (0..framebuffers.len())
+            .map(|_| uniform_buffer_data.create(&device.logical_device, device_memory_properties))
+            .collect::<Result<Vec<BufferInfo>>>()?;
+
+        let descriptor_sets = uniform_buffer_data.create_descriptor_sets(
+            logical_device,
+            pipeline.descriptor_set_layout,
+            &uniform_buffers,
+        )?;
+
+        let command_buffers = BufferDetails::<T>::create_command_buffers(
             logical_device,
             command_pool,
             pipeline,
             &framebuffers,
             &vertex_buffer,
             &index_buffer,
+            descriptor_sets,
             render_pass,
             swapchain_details.extent,
         )?;
@@ -494,6 +651,8 @@ impl BufferDetails {
             command_buffers,
             vertex_buffer,
             index_buffer,
+            uniform_buffers,
+            uniform_buffer_data,
         })
     }
 }

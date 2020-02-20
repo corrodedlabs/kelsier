@@ -8,11 +8,12 @@ use anyhow::{Context, Result};
 
 use crate::shaderc;
 
-use super::swapchain;
+use super::{buffers, swapchain};
 
 pub struct PipelineDetail {
     pub pipeline: vk::Pipeline,
     pub layout: vk::PipelineLayout,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub render_pass: vk::RenderPass,
 }
 
@@ -92,6 +93,28 @@ impl PipelineDetail {
         }
     }
 
+    fn create_descriptor_set_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+        let binding = [vk::DescriptorSetLayoutBinding {
+            binding: 0,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            ..Default::default()
+        }];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo {
+            binding_count: binding.len() as u32,
+            p_bindings: binding.as_ptr(),
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_descriptor_set_layout(&layout_info, None)
+                .context("failed to create descriptor set layout")
+        }
+    }
+
     pub fn create_graphics_pipeline(
         device: &ash::Device,
         swapchain: &swapchain::SwapchainDetails,
@@ -149,23 +172,23 @@ impl PipelineDetail {
             ..Default::default()
         };
 
-        let viewport = vk::Viewport {
+        let viewport = [vk::Viewport {
             width: extent.width as f32,
             height: extent.height as f32,
             max_depth: 1.0,
             ..Default::default()
-        };
+        }];
 
-        let scissor = vk::Rect2D {
+        let scissors = [vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: extent,
-        };
+        }];
 
         let viewport_state = vk::PipelineViewportStateCreateInfo {
-            viewport_count: 1,
-            p_viewports: &viewport,
-            scissor_count: 1,
-            p_scissors: &scissor,
+            viewport_count: viewport.len() as u32,
+            p_viewports: viewport.as_ptr(),
+            scissor_count: scissors.len() as u32,
+            p_scissors: scissors.as_ptr(),
             ..Default::default()
         };
 
@@ -186,22 +209,56 @@ impl PipelineDetail {
             ..Default::default()
         };
 
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState {
-            color_write_mask: vk::ColorComponentFlags::all(),
-            blend_enable: vk::FALSE,
-            ..Default::default()
+        let stencil_state = vk::StencilOpState {
+            fail_op: vk::StencilOp::KEEP,
+            pass_op: vk::StencilOp::KEEP,
+            depth_fail_op: vk::StencilOp::KEEP,
+            compare_op: vk::CompareOp::ALWAYS,
+            compare_mask: 0,
+            write_mask: 0,
+            reference: 0,
         };
+
+        let depth_state_create_info = vk::PipelineDepthStencilStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            p_next: ::std::ptr::null(),
+            flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
+            depth_test_enable: vk::FALSE,
+            depth_write_enable: vk::FALSE,
+            depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
+            depth_bounds_test_enable: vk::FALSE,
+            stencil_test_enable: vk::FALSE,
+            front: stencil_state,
+            back: stencil_state,
+            max_depth_bounds: 1.0,
+            min_depth_bounds: 0.0,
+        };
+
+        let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState {
+            blend_enable: vk::FALSE,
+            color_write_mask: vk::ColorComponentFlags::all(),
+            src_color_blend_factor: vk::BlendFactor::ONE,
+            dst_color_blend_factor: vk::BlendFactor::ZERO,
+            color_blend_op: vk::BlendOp::ADD,
+            src_alpha_blend_factor: vk::BlendFactor::ONE,
+            dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+            alpha_blend_op: vk::BlendOp::ADD,
+        }];
 
         let color_blending = vk::PipelineColorBlendStateCreateInfo {
             logic_op_enable: vk::FALSE,
             logic_op: vk::LogicOp::COPY,
             attachment_count: 1,
-            p_attachments: [color_blend_attachment].as_ptr(),
+            p_attachments: color_blend_attachment_states.as_ptr(),
             blend_constants: [0.0, 0.0, 0.0, 0.0],
             ..Default::default()
         };
 
+        let descriptor_set_layout: vk::DescriptorSetLayout =
+            PipelineDetail::create_descriptor_set_layout(device)?;
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo {
+            set_layout_count: 1,
+            p_set_layouts: [descriptor_set_layout].as_ptr(),
             ..Default::default()
         };
 
@@ -221,6 +278,7 @@ impl PipelineDetail {
             p_viewport_state: &viewport_state,
             p_rasterization_state: &rasterizer,
             p_multisample_state: &multisampling,
+            p_depth_stencil_state: &depth_state_create_info,
             p_color_blend_state: &color_blending,
             layout: pipeline_layout,
             base_pipeline_index: -1,
@@ -244,6 +302,7 @@ impl PipelineDetail {
         Ok(PipelineDetail {
             pipeline: pipelines[0],
             layout: pipeline_layout,
+            descriptor_set_layout,
             render_pass,
         })
     }
