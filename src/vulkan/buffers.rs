@@ -11,7 +11,7 @@ use super::pipeline;
 use super::queue;
 use super::swapchain;
 
-struct CommandBuffer {}
+pub struct CommandBuffer {}
 
 impl CommandBuffer {
     pub fn record_and_submit_single_command<F>(
@@ -126,7 +126,7 @@ impl CommandBuffer {
 
 #[derive(Debug, Copy, Clone)]
 pub struct BufferInfo {
-    buffer: vk::Buffer,
+    pub buffer: vk::Buffer,
     device_memory: vk::DeviceMemory,
     size: vk::DeviceSize,
 }
@@ -211,14 +211,16 @@ impl BufferInfo {
         )
     }
 
-    fn create_gpu_local_buffer<T>(
+    pub fn create_gpu_local_buffer<T>(
         device: &device::Device,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
         usage_flag: vk::BufferUsageFlags,
         data: &[T],
+        buffer_size: Option<vk::DeviceSize>,
     ) -> Result<BufferInfo> {
-        let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
+        let default_buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
+        let buffer_size = buffer_size.unwrap_or(default_buffer_size);
 
         let staging_buffer = BufferInfo::create(
             device,
@@ -277,6 +279,7 @@ impl BufferInfo {
             graphics_queue,
             vk::BufferUsageFlags::VERTEX_BUFFER,
             data,
+            None,
         )
     }
 
@@ -292,6 +295,7 @@ impl BufferInfo {
             graphics_queue,
             vk::BufferUsageFlags::INDEX_BUFFER,
             data,
+            None,
         )
     }
 }

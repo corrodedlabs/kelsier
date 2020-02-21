@@ -1,0 +1,3 @@
+- [ ] refactor combo of device, command_pool, graphics_queue to a struct
+- [ ] add drop for BufferInfo
+- [ ] cleanup all the other resources
