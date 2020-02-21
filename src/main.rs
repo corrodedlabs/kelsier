@@ -132,14 +132,8 @@ impl VulkanApp {
 
         let uniform_buffer_data = app::UniformBuffer::new(swapchain.extent);
 
-        let device_memory_properties = unsafe {
-            self.instance
-                .instance
-                .get_physical_device_memory_properties(device.physical_device)
-        };
         let buffer_details = buffers::BufferDetails::new(
             &device,
-            &device_memory_properties,
             queue.graphics,
             pipeline_detail,
             &swapchain,

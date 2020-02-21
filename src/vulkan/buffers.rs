@@ -135,29 +135,11 @@ type VertexBuffer = BufferInfo;
 type IndexBuffer = BufferInfo;
 
 impl BufferInfo {
-    fn find_memory_type(
-        type_filter: u32,
-        required_properties: vk::MemoryPropertyFlags,
-        mem_properties: &vk::PhysicalDeviceMemoryProperties,
-    ) -> Result<u32> {
-        mem_properties
-            .memory_types
-            .iter()
-            .enumerate()
-            .find(|(i, memory_type)| {
-                (type_filter & (1u32 << i)) > 0
-                    && memory_type.property_flags.contains(required_properties)
-            })
-            .map(|(i, _)| i as u32)
-            .ok_or(anyhow!("failed to find suitable memory type"))
-    }
-
     fn create(
-        device: &ash::Device,
+        device: &device::Device,
         size: vk::DeviceSize,
         usage: vk::BufferUsageFlags,
         required_memory_properties: vk::MemoryPropertyFlags,
-        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     ) -> Result<BufferInfo> {
         let buffer_info = vk::BufferCreateInfo {
             size,
@@ -168,15 +150,16 @@ impl BufferInfo {
 
         let buffer = unsafe {
             device
+                .logical_device
                 .create_buffer(&buffer_info, None)
                 .context("failed to create buffer")
         }?;
 
-        let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-        let memory_type = BufferInfo::find_memory_type(
+        let mem_requirements =
+            unsafe { device.logical_device.get_buffer_memory_requirements(buffer) };
+        let memory_type = device.are_properties_supported(
             mem_requirements.memory_type_bits,
             required_memory_properties,
-            device_memory_properties,
         )?;
 
         let allocate_info = vk::MemoryAllocateInfo {
@@ -187,12 +170,14 @@ impl BufferInfo {
 
         let buffer_memory = unsafe {
             device
+                .logical_device
                 .allocate_memory(&allocate_info, None)
                 .context("Failed to allocate vertex buffer memory!")
         }?;
 
         unsafe {
             device
+                .logical_device
                 .bind_buffer_memory(buffer, buffer_memory, 0)
                 .context("Failed to bind buffer")
         }
@@ -227,8 +212,7 @@ impl BufferInfo {
     }
 
     fn create_gpu_local_buffer<T>(
-        device: &ash::Device,
-        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
+        device: &device::Device,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
         usage_flag: vk::BufferUsageFlags,
@@ -241,12 +225,12 @@ impl BufferInfo {
             buffer_size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &device_memory_properties,
         )?;
 
         // copy data from cpu to gpu staging
         unsafe {
             let data_ptr = device
+                .logical_device
                 .map_memory(
                     staging_buffer.device_memory,
                     0,
@@ -257,7 +241,9 @@ impl BufferInfo {
 
             data_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
 
-            device.unmap_memory(staging_buffer.device_memory);
+            device
+                .logical_device
+                .unmap_memory(staging_buffer.device_memory);
         }
 
         let gpu_buffer = BufferInfo::create(
@@ -265,10 +251,14 @@ impl BufferInfo {
             buffer_size,
             vk::BufferUsageFlags::TRANSFER_DST | usage_flag,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device_memory_properties,
         )?;
 
-        staging_buffer.copy_to_gpu(device, graphics_queue, command_pool, &gpu_buffer)?;
+        staging_buffer.copy_to_gpu(
+            &device.logical_device,
+            graphics_queue,
+            command_pool,
+            &gpu_buffer,
+        )?;
 
         // todo free staging buffer
 
@@ -276,15 +266,13 @@ impl BufferInfo {
     }
 
     pub fn create_vertex_buffer<T>(
-        device: &ash::Device,
-        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
+        device: &device::Device,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
         data: &[T],
     ) -> Result<VertexBuffer> {
         BufferInfo::create_gpu_local_buffer(
             device,
-            device_memory_properties,
             command_pool,
             graphics_queue,
             vk::BufferUsageFlags::VERTEX_BUFFER,
@@ -293,15 +281,13 @@ impl BufferInfo {
     }
 
     pub fn create_index_buffer(
-        device: &ash::Device,
-        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
+        device: &device::Device,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
         data: &[u32],
     ) -> Result<IndexBuffer> {
         BufferInfo::create_gpu_local_buffer(
             device,
-            device_memory_properties,
             command_pool,
             graphics_queue,
             vk::BufferUsageFlags::INDEX_BUFFER,
@@ -313,18 +299,13 @@ impl BufferInfo {
 pub trait UniformBuffers: Copy {
     type Data;
 
-    fn create(
-        &self,
-        device: &ash::Device,
-        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-    ) -> Result<BufferInfo> {
+    fn create(&self, device: &device::Device) -> Result<BufferInfo> {
         let buffer_size = ::std::mem::size_of::<Self::Data>() as vk::DeviceSize;
         BufferInfo::create(
             device,
             buffer_size as vk::DeviceSize,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            device_memory_properties,
         )
     }
 
@@ -581,7 +562,6 @@ impl<T: UniformBuffers> BufferDetails<T> {
 
     pub fn new(
         device: &device::Device,
-        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
         graphics_queue: vk::Queue,
         pipeline: pipeline::PipelineDetail,
         swapchain_details: &swapchain::SwapchainDetails,
@@ -607,24 +587,18 @@ impl<T: UniformBuffers> BufferDetails<T> {
         let command_pool =
             BufferDetails::<T>::create_command_pool(logical_device, &device.family_indices)?;
 
-        let vertex_buffer = BufferInfo::create_vertex_buffer(
-            &device.logical_device,
-            device_memory_properties,
-            command_pool,
-            graphics_queue,
-            &vertex_data,
-        )?;
+        let vertex_buffer =
+            BufferInfo::create_vertex_buffer(device, command_pool, graphics_queue, &vertex_data)?;
 
         let index_buffer = BufferInfo::create_index_buffer(
-            logical_device,
-            device_memory_properties,
+            device,
             command_pool,
             graphics_queue,
             index_data.as_slice(),
         )?;
 
         let uniform_buffers = (0..framebuffers.len())
-            .map(|_| uniform_buffer_data.create(&device.logical_device, device_memory_properties))
+            .map(|_| uniform_buffer_data.create(&device))
             .collect::<Result<Vec<BufferInfo>>>()?;
 
         let descriptor_sets = uniform_buffer_data.create_descriptor_sets(

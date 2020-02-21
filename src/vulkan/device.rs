@@ -18,6 +18,7 @@ use std::ffi::{CStr, CString};
 pub struct Device {
     pub physical_device: vk::PhysicalDevice,
     pub logical_device: ash::Device,
+    pub memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub family_indices: queue::FamilyIndices,
 }
 
@@ -196,15 +197,37 @@ impl Device {
         .map(|device| (device, indices))
     }
 
+    pub fn are_properties_supported(
+        &self,
+        type_filter: u32,
+        required_properties: vk::MemoryPropertyFlags,
+    ) -> Result<u32> {
+        self.memory_properties
+            .memory_types
+            .iter()
+            .enumerate()
+            .find(|(i, memory_type)| {
+                (type_filter & (1u32 << i)) > 0
+                    && memory_type.property_flags.contains(required_properties)
+            })
+            .map(|(i, _)| i as u32)
+            .ok_or(anyhow!("failed to find suitable memory type"))
+    }
+
     pub fn new(instance: &ash::Instance, surface_info: &surface::SurfaceInfo) -> Result<Device> {
         let physical_device = Device::pick_physical_device(instance, surface_info)?;
 
-        Device::create_logical_device(instance, physical_device, surface_info).map(
-            |(logical_device, family_indices)| Device {
-                physical_device,
-                logical_device,
-                family_indices,
-            },
-        )
+        let memory_properties =
+            unsafe { instance.get_physical_device_memory_properties(physical_device) };
+
+        let (logical_device, family_indices) =
+            Device::create_logical_device(instance, physical_device, surface_info)?;
+
+        Ok(Device {
+            physical_device,
+            logical_device,
+            memory_properties,
+            family_indices,
+        })
     }
 }
