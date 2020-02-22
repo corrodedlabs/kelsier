@@ -14,6 +14,7 @@ use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 use std::ffi::{CStr, CString};
+use std::collections::HashSet;
 
 pub struct Device {
     pub physical_device: vk::PhysicalDevice,
@@ -48,25 +49,21 @@ impl Device {
                 .context("Failed to get device extension properties.")
         }?;
 
-        let mut available_extension_names = vec![];
+        let mut available_extension_names = HashSet::new();
 
         for extension in available_extensions.iter() {
             let extension_name = foreign::vk_to_string(&extension.extension_name);
 
-            available_extension_names.push(extension_name);
+            available_extension_names.insert(extension_name);
         }
 
-        use std::collections::HashSet;
         let mut required_extensions = HashSet::new();
+        // can directly convert device_extensions to set and check for subset, but for now it's fine
         for extension in device_extensions.names.iter() {
             required_extensions.insert(extension.to_string());
         }
 
-        for extension_name in available_extension_names.iter() {
-            required_extensions.remove(extension_name);
-        }
-
-        return Ok(required_extensions.is_empty());
+        return Ok(required_extensions.is_subset(&available_extension_names));
     }
 
     fn is_physical_device_suitable(
