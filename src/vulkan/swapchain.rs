@@ -2,11 +2,14 @@ use ash::extensions::khr::Swapchain;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
+use super::constants::*;
 use super::device;
 use super::surface;
+use std::cmp;
 
 use anyhow::anyhow;
 use anyhow::{Context, Result};
+use ash::vk::Extent2D;
 
 pub struct SupportDetail {
     pub capabilities: vk::SurfaceCapabilitiesKHR,
@@ -77,11 +80,27 @@ impl SwapchainDetails {
     }
 
     fn choose_swap_extent(support_detail: &SupportDetail) -> vk::Extent2D {
-        //  todo this should ideally be:
-        //  max(capabilities.minImageExtent.width,
-        //  min(capabilities.maxImageExtent.width, actualExtent.width));
-        //  actualExtent comes from window dimension
-        support_detail.capabilities.current_extent
+        /*
+        Vulkan tells us to match the resolution of the window by setting the width and height in the currentExtent member.
+        However, some window managers do allow us to differ here and this is indicated by setting the width
+        and height in currentExtent to a special value: the maximum value of uint32_t.
+        In that case we'll pick the resolution that best matches the window within the minImageExtent and maxImageExtent bounds.
+        But somehow in either cases same resolution is being picked up {1600, 1200}...strange
+        */
+        if support_detail.capabilities.current_extent.width != std::u32::MAX {
+            println!("Current extent {:?}",support_detail.capabilities.current_extent);
+            support_detail.capabilities.current_extent
+        } else {
+            let mut actual_extent: vk::Extent2D = Extent2D { width: WINDOW_WIDTH, height: WINDOW_HEIGHT };
+            actual_extent.width = cmp::max(
+                support_detail.capabilities.min_image_extent.width,
+                cmp::min(support_detail.capabilities.min_image_extent.width, actual_extent.width));
+            actual_extent.height = cmp::max(
+                support_detail.capabilities.min_image_extent.height,
+                cmp::min(support_detail.capabilities.min_image_extent.height, actual_extent.height));
+
+            actual_extent
+        }
     }
 
     fn create_image_view(

@@ -8,6 +8,9 @@ pub const ENABLE_VALIDATION: bool = true;
 
 pub const VALIDATION_LAYER: [&'static str; 1] = ["VK_LAYER_KHRONOS_validation"];
 
+pub const WINDOW_WIDTH: u32 = 800;
+pub const WINDOW_HEIGHT: u32 = 600;
+
 pub struct EnabledLayers {
     pub count: u32,
     pub names: *const *const c_char,
