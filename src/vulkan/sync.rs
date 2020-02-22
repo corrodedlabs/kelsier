@@ -17,8 +17,11 @@ pub struct FrameState {
 }
 
 impl FrameState {
-    pub fn default(frames_in_flight: u32) -> FrameState {
-        let images_in_flight = (0..frames_in_flight).into_iter().map(|_| None).collect();
+    pub fn default(num_swapchain_images: u32) -> FrameState {
+        let images_in_flight = (0..num_swapchain_images)
+            .into_iter()
+            .map(|_| None)
+            .collect();
 
         FrameState {
             swapchain_image_index: 0,
@@ -95,6 +98,8 @@ impl<T: buffers::UniformBuffers> Objects<T> {
 
         let start_time = Instant::now();
 
+        let frame_state = FrameState::default(swapchain_details.images.len() as u32);
+
         Ok(Objects {
             device: device,
             queue,
@@ -105,7 +110,7 @@ impl<T: buffers::UniformBuffers> Objects<T> {
             render_finished_semaphores,
             in_flight_fences,
             start_time,
-            frame_state: FrameState::default(frames_in_flight),
+            frame_state: frame_state,
         })
     }
 
@@ -116,7 +121,7 @@ impl<T: buffers::UniformBuffers> Objects<T> {
         let command_buffer = sync_objects
             .buffers
             .command_buffers
-            .get(current_frame)
+            .get(acquired_image_index as usize)
             .ok_or(anyhow!("could not find buffer for current frame"))?;
 
         let in_flight_fence = sync_objects
@@ -238,6 +243,22 @@ impl<T: buffers::UniformBuffers> Objects<T> {
 
         println!("images in flight: {:?}", self.frame_state.images_in_flight);
 
+        // updating uniform buffers
+        let delta_time = self.start_time.elapsed();
+        self.start_time = Instant::now();
+
+        let uniform_buffer = self
+            .buffers
+            .uniform_buffers
+            .get(acquired_image_index as usize)
+            .ok_or(anyhow!("could not find uniform buffer for the image"))?;
+
+        self.buffers.uniform_buffer_data.update_buffer(
+            &self.device,
+            uniform_buffer,
+            delta_time.subsec_micros() as f32 / 1000_000.0_f32,
+        )?;
+
         let image_in_flight = self
             .frame_state
             .images_in_flight
@@ -257,24 +278,7 @@ impl<T: buffers::UniformBuffers> Objects<T> {
             .transpose()?;
         self.frame_state.images_in_flight[acquired_image_index as usize] = Some(*in_flight_fence);
 
-        let delta_time = self.start_time.elapsed();
-        self.start_time = Instant::now();
-
-        println!("uniform buffers are {:?}", self.buffers.uniform_buffers);
-        let uniform_buffer = self
-            .buffers
-            .uniform_buffers
-            .get(acquired_image_index as usize)
-            .ok_or(anyhow!("could not find uniform buffer for the image"))?;
-
-        self.buffers.uniform_buffer_data.update_buffer(
-            &self.device,
-            uniform_buffer,
-            delta_time.subsec_micros() as f32 / 1000_000.0_f32,
-        )?;
-
         Objects::submit_buffers_to_queue(self, acquired_image_index)?;
-        println!("buffer submitted for presentation");
 
         self.frame_state.current_frame =
             ((self.frame_state.current_frame + 1) % self.frames_in_flight as usize) as usize;

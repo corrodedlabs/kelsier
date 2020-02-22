@@ -141,7 +141,7 @@ impl VulkanApp {
 
         // For some reason frames in flight needs to be set to 3 as only 3 uniform buffers are being created in macOS.
         //TODO: Need to fix this
-        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 8)
+        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 10)
     }
 
     pub fn new() -> Result<VulkanApp> {
