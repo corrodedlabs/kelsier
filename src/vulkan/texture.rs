@@ -25,11 +25,12 @@ impl Image {
         let data = match &object {
             image::DynamicImage::ImageBgr8(_)
             | image::DynamicImage::ImageLuma8(_)
-            | image::DynamicImage::ImageRgb8(_) => object.to_rgba().into_raw(),
+            | image::DynamicImage::ImageRgb8(_) => Ok(object.to_rgba().into_raw()),
             image::DynamicImage::ImageBgra8(_)
             | image::DynamicImage::ImageLumaA8(_)
-            | image::DynamicImage::ImageRgba8(_) => object.to_bytes(),
-        };
+            | image::DynamicImage::ImageRgba8(_) => Ok(object.to_bytes()),
+            _ => Err(anyhow!("image cannot be converted to bytes")),
+        }?;
         let size = (::std::mem::size_of::<u8>() as u32 * object.width() * object.height() * 4)
             as vk::DeviceSize;
 
