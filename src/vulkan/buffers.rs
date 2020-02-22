@@ -10,6 +10,9 @@ use super::device;
 use super::pipeline;
 use super::queue;
 use super::swapchain;
+use super::texture;
+
+use std::path::Path;
 
 pub struct CommandBuffer {}
 
@@ -375,6 +378,7 @@ pub trait UniformBuffers: Copy {
         device: &ash::Device,
         descriptor_layout: vk::DescriptorSetLayout,
         uniform_buffers: &Vec<BufferInfo>,
+        texture_data: texture::Texture,
     ) -> Result<Vec<vk::DescriptorSet>> {
         let num_sets = uniform_buffers.len();
 
@@ -404,17 +408,34 @@ pub trait UniformBuffers: Copy {
                     range: ::std::mem::size_of::<Self::Data>() as u64,
                 }];
 
-                let descriptor_write = vk::WriteDescriptorSet {
-                    dst_set: descriptor_set,
-                    dst_binding: 0,
-                    dst_array_element: 0,
-                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                    descriptor_count: 1,
-                    p_buffer_info: buffer_info.as_ptr(),
-                    ..Default::default()
-                };
+                let image_info = [vk::DescriptorImageInfo {
+                    sampler: texture_data.sampler,
+                    image_view: texture_data.image_view,
+                    image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                }];
 
-                unsafe { device.update_descriptor_sets(&[descriptor_write], &[]) };
+                let descriptor_write_sets = [
+                    vk::WriteDescriptorSet {
+                        dst_set: descriptor_set,
+                        dst_binding: 0,
+                        dst_array_element: 0,
+                        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                        descriptor_count: 1,
+                        p_buffer_info: buffer_info.as_ptr(),
+                        ..Default::default()
+                    },
+                    vk::WriteDescriptorSet {
+                        dst_set: descriptor_set,
+                        dst_binding: 1,
+                        dst_array_element: 0,
+                        descriptor_count: 1,
+                        descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        p_image_info: image_info.as_ptr(),
+                        ..Default::default()
+                    },
+                ];
+
+                unsafe { device.update_descriptor_sets(&descriptor_write_sets, &[]) };
 
                 Ok(descriptor_set)
             })
@@ -572,6 +593,7 @@ impl<T: UniformBuffers> BufferDetails<T> {
         vertex_data: Vec<impl pipeline::VertexData>,
         index_data: Vec<u32>,
         uniform_buffer_data: T,
+        texture_image: &Path,
     ) -> Result<BufferDetails<T>> {
         let logical_device = &device.logical_device;
         let render_pass = pipeline.render_pass;
@@ -605,10 +627,14 @@ impl<T: UniformBuffers> BufferDetails<T> {
             .map(|_| uniform_buffer_data.create(&device))
             .collect::<Result<Vec<BufferInfo>>>()?;
 
+        let texture_data =
+            texture::Texture::new(device, command_pool, graphics_queue, texture_image)?;
+
         let descriptor_sets = uniform_buffer_data.create_descriptor_sets(
             logical_device,
             pipeline.descriptor_set_layout,
             &uniform_buffers,
+            texture_data,
         )?;
 
         let command_buffers = BufferDetails::<T>::create_command_buffers(

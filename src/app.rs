@@ -11,24 +11,29 @@ use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 pub struct VertexData {
     pub pos: [f32; 2],
     pub color: [f32; 3],
+    pub tex_coord: [f32; 2],
 }
 
 pub const VERTICES: [VertexData; 4] = [
     VertexData {
         pos: [-0.75, -0.75],
         color: [1.0, 0.0, 0.0],
+        tex_coord: [1.0, 0.0],
     },
     VertexData {
         pos: [0.75, -0.75],
         color: [0.0, 1.0, 0.0],
+        tex_coord: [0.0, 0.0],
     },
     VertexData {
         pos: [0.75, 0.75],
         color: [0.0, 0.0, 1.0],
+        tex_coord: [0.0, 1.0],
     },
     VertexData {
         pos: [-0.75, 0.75],
         color: [1.0, 1.0, 1.0],
+        tex_coord: [1.0, 1.0],
     },
 ];
 
@@ -59,6 +64,12 @@ impl pipeline::VertexData for VertexData {
                 location: 1,
                 format: vk::Format::R32G32B32_SFLOAT,
                 offset: offset_of!(VertexData, color) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 2,
+                format: vk::Format::R32G32_SFLOAT,
+                offset: offset_of!(VertexData, tex_coord) as u32,
             },
         ]
         .to_vec()

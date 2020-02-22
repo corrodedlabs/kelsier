@@ -94,13 +94,24 @@ impl PipelineDetail {
     }
 
     fn create_descriptor_set_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
-        let binding = [vk::DescriptorSetLayoutBinding {
-            binding: 0,
-            descriptor_count: 1,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            stage_flags: vk::ShaderStageFlags::VERTEX,
-            ..Default::default()
-        }];
+        let binding = [
+            vk::DescriptorSetLayoutBinding {
+                //transform uniform
+                binding: 0,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                stage_flags: vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            },
+            vk::DescriptorSetLayoutBinding {
+                // combined image sampler uniform (used for texture mapping)
+                binding: 1,
+                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                ..Default::default()
+            },
+        ];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo {
             binding_count: binding.len() as u32,

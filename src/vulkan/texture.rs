@@ -98,18 +98,18 @@ impl TransitionBarrier {
     }
 }
 
-pub struct Texture {
+pub struct ImageData {
     pub image: vk::Image,
     pub memory: vk::DeviceMemory,
 }
 
-impl Texture {
-    pub fn create_image(
+impl ImageData {
+    fn create_image(
         device: &device::Device,
         width: u32,
         height: u32,
         required_memory_properties: vk::MemoryPropertyFlags,
-    ) -> Result<Texture> {
+    ) -> Result<ImageData> {
         let image_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
             format: vk::Format::R8G8B8A8_SRGB,
@@ -162,7 +162,7 @@ impl Texture {
                 .context("Failed to bind image memory!")
         }?;
 
-        Ok(Texture {
+        Ok(ImageData {
             image: texture_image,
             memory: texture_image_memory,
         })
@@ -186,7 +186,7 @@ impl Texture {
 
         let aspect_mask = match new_layout {
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL => {
-                if Texture::has_stencil_component(format) {
+                if ImageData::has_stencil_component(format) {
                     vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL
                 } else {
                     vk::ImageAspectFlags::DEPTH
@@ -232,40 +232,6 @@ impl Texture {
         )
     }
 
-    pub fn create_image_view(
-        device: &ash::Device,
-        image: vk::Image,
-        format: vk::Format,
-        aspect_flags: vk::ImageAspectFlags,
-        mip_levels: u32,
-    ) -> Result<vk::ImageView> {
-        let imageview_create_info = vk::ImageViewCreateInfo {
-            view_type: vk::ImageViewType::TYPE_2D,
-            format,
-            components: vk::ComponentMapping {
-                r: vk::ComponentSwizzle::IDENTITY,
-                g: vk::ComponentSwizzle::IDENTITY,
-                b: vk::ComponentSwizzle::IDENTITY,
-                a: vk::ComponentSwizzle::IDENTITY,
-            },
-            subresource_range: vk::ImageSubresourceRange {
-                aspect_mask: aspect_flags,
-                base_mip_level: 0,
-                level_count: mip_levels,
-                base_array_layer: 0,
-                layer_count: 1,
-            },
-            image,
-            ..Default::default()
-        };
-
-        unsafe {
-            device
-                .create_image_view(&imageview_create_info, None)
-                .context("Failed to create image view!")
-        }
-    }
-
     pub fn copy_buffer_to_image(
         device: &ash::Device,
         command_pool: vk::CommandPool,
@@ -275,7 +241,7 @@ impl Texture {
         width: u32,
         height: u32,
     ) -> Result<()> {
-        Texture::transition_image_layout(
+        ImageData::transition_image_layout(
             device,
             command_pool,
             submit_queue,
@@ -316,7 +282,7 @@ impl Texture {
             },
         )?;
 
-        Texture::transition_image_layout(
+        ImageData::transition_image_layout(
             device,
             command_pool,
             submit_queue,
@@ -333,7 +299,7 @@ impl Texture {
         command_pool: vk::CommandPool,
         submit_queue: vk::Queue,
         image_path: &Path,
-    ) -> Result<Texture> {
+    ) -> Result<ImageData> {
         let image = Image::new(image_path)?;
         let width = image.object.width();
         let height = image.object.height();
@@ -347,19 +313,109 @@ impl Texture {
             Some(image.size),
         )?;
 
-        let texture =
-            Texture::create_image(device, width, height, vk::MemoryPropertyFlags::DEVICE_LOCAL)?;
+        let image_data =
+            ImageData::create_image(device, width, height, vk::MemoryPropertyFlags::DEVICE_LOCAL)?;
 
-        Texture::copy_buffer_to_image(
+        ImageData::copy_buffer_to_image(
             &device.logical_device,
             command_pool,
             submit_queue,
             staging_buffer.buffer,
-            texture.image,
+            image_data.image,
             width,
             height,
         )?;
 
-        Ok(texture)
+        Ok(image_data)
+    }
+}
+
+pub struct Texture {
+    pub image_data: ImageData,
+    pub image_view: vk::ImageView,
+    pub sampler: vk::Sampler,
+}
+
+impl Texture {
+    pub fn create_image_view(
+        device: &ash::Device,
+        image: vk::Image,
+        format: vk::Format,
+        mip_levels: u32,
+    ) -> Result<vk::ImageView> {
+        let imageview_create_info = vk::ImageViewCreateInfo {
+            view_type: vk::ImageViewType::TYPE_2D,
+            format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY,
+            },
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1,
+            },
+            image,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_image_view(&imageview_create_info, None)
+                .context("Failed to create image view!")
+        }
+    }
+
+    pub fn create_texture_sampler(device: &ash::Device) -> Result<vk::Sampler> {
+        let sampler_info = vk::SamplerCreateInfo {
+            mag_filter: vk::Filter::LINEAR,
+            min_filter: vk::Filter::LINEAR,
+            address_mode_u: vk::SamplerAddressMode::REPEAT,
+            address_mode_v: vk::SamplerAddressMode::REPEAT,
+            address_mode_w: vk::SamplerAddressMode::REPEAT,
+            max_anisotropy: 16.0,
+            compare_enable: vk::FALSE,
+            compare_op: vk::CompareOp::ALWAYS,
+            mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+            border_color: vk::BorderColor::INT_OPAQUE_BLACK,
+            anisotropy_enable: vk::TRUE,
+            unnormalized_coordinates: vk::FALSE,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_sampler(&sampler_info, None)
+                .context("failed to create sampler!")
+        }
+    }
+
+    pub fn new(
+        device: &device::Device,
+        command_pool: vk::CommandPool,
+        submit_queue: vk::Queue,
+        image_path: &Path,
+    ) -> Result<Texture> {
+        let image_data =
+            ImageData::create_texture_image(device, command_pool, submit_queue, image_path)?;
+
+        let image_view = Texture::create_image_view(
+            &device.logical_device,
+            image_data.image,
+            vk::Format::R8G8B8A8_UNORM,
+            1,
+        )?;
+
+        let sampler = Texture::create_texture_sampler(&device.logical_device)?;
+
+        Ok(Texture {
+            image_data,
+            image_view,
+            sampler,
+        })
     }
 }

@@ -140,6 +140,7 @@ impl VulkanApp {
             app::VERTICES.to_vec(),
             app::INDICES.to_vec(),
             uniform_buffer_data,
+            std::path::Path::new("textures/winter.jpeg"),
         )?;
         println!("buffers created");
 
@@ -159,6 +160,7 @@ fn main() -> Result<()> {
     let frame = match app.setup(&window) {
         Ok(obj) => obj,
         Err(e) => {
+            println!("Setup failed {:?}", e);
             panic!(e);
         }
     };
