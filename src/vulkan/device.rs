@@ -63,7 +63,7 @@ impl Device {
             required_extensions.insert(extension.to_string());
         }
 
-        return Ok(required_extensions.is_subset(&available_extension_names));
+        return Ok(available_extension_names.is_superset(&required_extensions));
     }
 
     fn is_physical_device_suitable(
