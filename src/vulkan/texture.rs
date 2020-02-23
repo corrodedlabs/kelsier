@@ -407,7 +407,7 @@ impl Texture {
             &device.logical_device,
             image_data.image,
             vk::Format::R8G8B8A8_UNORM,
-            1,
+            0,
         )?;
 
         let sampler = Texture::create_texture_sampler(&device.logical_device)?;
