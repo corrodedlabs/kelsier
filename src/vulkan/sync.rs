@@ -8,7 +8,7 @@ use super::buffers;
 use super::queue;
 use super::swapchain;
 
-use std::time::{Instant, SystemTime};
+use std::time::Instant;
 
 pub struct FrameState {
     swapchain_image_index: u32,

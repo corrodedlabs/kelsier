@@ -1,10 +1,9 @@
-use ash::{version::DeviceV1_0, vk};
-
+use ash::vk;
 use super::vulkan::{buffers, pipeline};
 
 use memoffset::offset_of;
 
-use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
+use cgmath::{Deg, Matrix4, Point3, Vector3};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

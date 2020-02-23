@@ -5,7 +5,6 @@ use std::os::raw::c_char;
 use crate::foreign;
 
 use super::constants::*;
-use super::instance;
 use super::queue;
 use super::surface;
 use super::swapchain;
@@ -13,7 +12,7 @@ use super::swapchain;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::collections::HashSet;
 
 pub struct Device {

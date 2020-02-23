@@ -3,12 +3,11 @@ use std::ffi::CString;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 use crate::shaderc;
 
-use super::{buffers, swapchain};
+use super::swapchain;
 
 pub struct PipelineDetail {
     pub pipeline: vk::Pipeline,

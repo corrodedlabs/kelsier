@@ -5,18 +5,11 @@ use winit::{
 };
 
 use ash::{
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk, vk_make_version,
-};
-
-use std::{
-    ffi::{CStr, CString},
-    os::raw::c_void,
-    ptr,
+    version::DeviceV1_0,
 };
 
 use kelsier::{
-    app, foreign, platforms, shaderc,
+    app,shaderc,
     vulkan::constants::*,
     vulkan::{buffers, device, instance, pipeline, queue, surface, swapchain, sync},
 };

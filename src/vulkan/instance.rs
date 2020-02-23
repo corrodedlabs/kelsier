@@ -1,6 +1,6 @@
 use ash::{
     version::{EntryV1_0, InstanceV1_0},
-    vk, vk_make_version,
+    vk
 };
 
 use std::{
@@ -13,7 +13,7 @@ use crate::foreign;
 use crate::platforms;
 use crate::vulkan::constants::*;
 
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Result};
 
 unsafe extern "system" fn vulkan_debug_utils_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,

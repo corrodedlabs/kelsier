@@ -3,7 +3,6 @@ use shaderc;
 use std::fs::File;
 use std::io::prelude::*;
 
-use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 pub struct ShaderSource {

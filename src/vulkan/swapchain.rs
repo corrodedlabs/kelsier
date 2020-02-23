@@ -140,7 +140,7 @@ impl SwapchainDetails {
     pub fn new(
         instance: &ash::Instance,
         device: &device::Device,
-        window: &winit::window::Window,
+        _window: &winit::window::Window,
         family_indices: &super::queue::FamilyIndices,
         surface_info: &surface::SurfaceInfo,
     ) -> Result<SwapchainDetails> {
