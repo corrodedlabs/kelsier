@@ -56,7 +56,7 @@ impl pipeline::VertexData for VertexData {
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 0,
-                format: vk::Format::R32G32B32A32_SFLOAT,
+                format: vk::Format::R32G32_SFLOAT,
                 offset: offset_of!(VertexData, pos) as u32,
             },
             vk::VertexInputAttributeDescription {
@@ -93,6 +93,8 @@ impl UniformBuffer {
             10.0,
         );
 
+        projection[1][1] = projection[1][1] * -1.0;
+
         UniformBuffer {
             model: Matrix4::from_angle_z(Deg(90.0)),
             view: Matrix4::look_at(
@@ -111,7 +113,6 @@ impl buffers::UniformBuffers for UniformBuffer {
     fn update(&mut self, delta_time: f32) -> () {
         self.model = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Deg(90.0) * delta_time)
             * self.model;
-        self.proj[1][1] = self.proj[1][1] * -1.0;
     }
 
     fn get_data(self) -> Self::Data {
