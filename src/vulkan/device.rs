@@ -12,8 +12,8 @@ use super::swapchain;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 
-use std::ffi::CString;
 use std::collections::HashSet;
+use std::ffi::{CStr, CString};
 
 pub struct Device {
     pub physical_device: vk::PhysicalDevice,
@@ -208,6 +208,28 @@ impl Device {
             })
             .map(|(i, _)| i as u32)
             .ok_or(anyhow!("failed to find suitable memory type"))
+    }
+
+    pub fn find_supported_format<'a>(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        candidate_formats: &'a [vk::Format],
+        tiling: vk::ImageTiling,
+        features: vk::FormatFeatureFlags,
+    ) -> Result<&'a vk::Format> {
+        candidate_formats
+            .iter()
+            .find(|&format| {
+                let format_properties = unsafe {
+                    instance.get_physical_device_format_properties(physical_device, *format)
+                };
+
+                (tiling == vk::ImageTiling::LINEAR
+                    && format_properties.linear_tiling_features.contains(features))
+                    || (tiling == vk::ImageTiling::OPTIMAL
+                        && format_properties.optimal_tiling_features.contains(features))
+            })
+            .context("could not find supported format")
     }
 
     pub fn new(instance: &ash::Instance, surface_info: &surface::SurfaceInfo) -> Result<Device> {

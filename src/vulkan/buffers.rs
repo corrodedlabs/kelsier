@@ -1,4 +1,6 @@
-use ash::version::DeviceV1_0;
+use std::ffi::CString;
+
+use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 
 use anyhow::anyhow;
@@ -408,7 +410,7 @@ pub trait UniformBuffers: Copy {
 
                 let image_info = [vk::DescriptorImageInfo {
                     sampler: texture_data.sampler,
-                    image_view: texture_data.image_view,
+                    image_view: texture_data.image_data.image_view,
                     image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 }];
 
@@ -439,6 +441,41 @@ pub trait UniformBuffers: Copy {
             })
             .collect()
     }
+}
+
+pub struct DepthBuffer {
+    pub image: vk::Image,
+    pub image_view: vk::ImageView,
+    pub memory: vk::DeviceMemory,
+}
+
+impl DepthBuffer {
+    pub fn find_depth_format(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<&vk::Format> {
+        device::Device::find_supported_format(
+            instance,
+            physical_device,
+            &[
+                vk::Format::D32_SFLOAT,
+                vk::Format::D32_SFLOAT_S8_UINT,
+                vk::Format::D24_UNORM_S8_UINT,
+            ],
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    }
+
+    // pub fn new(
+    //     instance: &ash::Instance,
+    //     device: device::Device,
+    //     command_pool: vk::CommandPool,
+    //     graphics_queue: vk::Queue,
+    //     swapchain_extent: vk::Extent2D,
+    // ) -> Result<DepthBuffer> {
+    //     let depth_format = DepthBuffer::find_depth_format(instance, device.physical_device)?;
+    // }
 }
 
 pub struct BufferDetails<T: UniformBuffers> {

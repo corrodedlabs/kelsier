@@ -1,6 +1,7 @@
 pub mod buffers;
 pub mod constants;
 pub mod device;
+pub mod image;
 pub mod instance;
 pub mod pipeline;
 pub mod queue;
