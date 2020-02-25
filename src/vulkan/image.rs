@@ -4,7 +4,10 @@ use ash::vk;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 
-use super::{buffers, device};
+use super::{buffers, device, texture};
+
+use image;
+use image::GenericImageView;
 
 pub struct TransitionBarrier {
     src_access_mask: vk::AccessFlags,
@@ -62,6 +65,25 @@ impl TransitionBarrier {
     }
 }
 
+pub struct ImageProperties {
+    pub width: u32,
+    pub height: u32,
+    pub format: vk::Format,
+    pub usage_flags: vk::ImageUsageFlags,
+    pub aspect_flag: vk::ImageAspectFlags,
+}
+
+pub trait ImageType {
+    fn get_property(&self) -> &ImageProperties;
+    fn perform_transition(
+        &self,
+        device: &ash::Device,
+        command_pool: vk::CommandPool,
+        graphics_queue: vk::Queue,
+        image: vk::Image,
+    ) -> Result<()>;
+}
+
 pub struct ImageData {
     pub image: vk::Image,
     pub image_view: vk::ImageView,
@@ -71,22 +93,21 @@ pub struct ImageData {
 impl ImageData {
     fn create_image(
         device: &device::Device,
-        width: u32,
-        height: u32,
+        image_properties: &ImageProperties,
         required_memory_properties: vk::MemoryPropertyFlags,
     ) -> Result<(vk::Image, vk::DeviceMemory)> {
         let image_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
-            format: vk::Format::R8G8B8A8_SRGB,
+            format: image_properties.format,
             array_layers: 1,
             samples: vk::SampleCountFlags::TYPE_1,
             tiling: vk::ImageTiling::OPTIMAL,
-            usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            usage: image_properties.usage_flags,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             initial_layout: vk::ImageLayout::UNDEFINED,
             extent: vk::Extent3D {
-                width,
-                height,
+                width: image_properties.width,
+                height: image_properties.height,
                 depth: 1,
             },
             ..Default::default()
@@ -191,15 +212,94 @@ impl ImageData {
         )
     }
 
+    pub fn create_image_view(
+        device: &ash::Device,
+        image: vk::Image,
+        image_property: &ImageProperties,
+        mip_levels: u32,
+    ) -> Result<vk::ImageView> {
+        let imageview_create_info = vk::ImageViewCreateInfo {
+            view_type: vk::ImageViewType::TYPE_2D,
+            format: image_property.format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY,
+            },
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: image_property.aspect_flag,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1,
+            },
+            image,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_image_view(&imageview_create_info, None)
+                .context("Failed to create image view!")
+        }
+    }
+
+    pub fn new<T: ImageType>(
+        device: &device::Device,
+        command_pool: vk::CommandPool,
+        graphics_queue: vk::Queue,
+        image_type: T,
+    ) -> Result<ImageData> {
+        let (image, memory) = ImageData::create_image(
+            device,
+            image_type.get_property(),
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )?;
+
+        image_type.perform_transition(
+            &device.logical_device,
+            command_pool,
+            graphics_queue,
+            image,
+        )?;
+
+        let image_view = ImageData::create_image_view(
+            &device.logical_device,
+            image,
+            &image_type.get_property(),
+            0,
+        )?;
+
+        Ok(ImageData {
+            image,
+            image_view,
+            memory,
+        })
+    }
+}
+
+pub struct TextureImageProperty {
+    pub property: ImageProperties,
+    pub buffer: vk::Buffer,
+}
+
+pub enum ImagePropertyType {
+    TextureImage(TextureImageProperty),
+    DepthImage(ImageProperties),
+}
+
+impl ImagePropertyType {
     pub fn copy_buffer_to_image(
         device: &ash::Device,
         command_pool: vk::CommandPool,
         submit_queue: vk::Queue,
-        buffer: vk::Buffer,
+        texture_image_property: &TextureImageProperty,
         image: vk::Image,
-        width: u32,
-        height: u32,
     ) -> Result<()> {
+        let TextureImageProperty { property, buffer } = texture_image_property;
+        let ImageProperties { width, height, .. } = *property;
+
         ImageData::transition_image_layout(
             device,
             command_pool,
@@ -233,7 +333,7 @@ impl ImageData {
             |command_buffer| unsafe {
                 device.cmd_copy_buffer_to_image(
                     command_buffer,
-                    buffer,
+                    *buffer,
                     image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &buffer_image_regions,
@@ -253,71 +353,75 @@ impl ImageData {
         )
     }
 
-    pub fn create_image_view(
-        device: &ash::Device,
-        image: vk::Image,
-        format: vk::Format,
-        mip_levels: u32,
-    ) -> Result<vk::ImageView> {
-        let imageview_create_info = vk::ImageViewCreateInfo {
-            view_type: vk::ImageViewType::TYPE_2D,
-            format,
-            components: vk::ComponentMapping {
-                r: vk::ComponentSwizzle::IDENTITY,
-                g: vk::ComponentSwizzle::IDENTITY,
-                b: vk::ComponentSwizzle::IDENTITY,
-                a: vk::ComponentSwizzle::IDENTITY,
-            },
-            subresource_range: vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: mip_levels,
-                base_array_layer: 0,
-                layer_count: 1,
-            },
-            image,
-            ..Default::default()
+    pub fn texture_property(
+        device: &device::Device,
+        command_pool: vk::CommandPool,
+        submit_queue: vk::Queue,
+        image: texture::RawImage,
+    ) -> Result<ImagePropertyType> {
+        let width = image.object.width();
+        let height = image.object.height();
+
+        let property = ImageProperties {
+            width,
+            height,
+            format: vk::Format::R8G8B8A8_SRGB,
+            usage_flags: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            aspect_flag: vk::ImageAspectFlags::COLOR,
         };
 
-        unsafe {
-            device
-                .create_image_view(&imageview_create_info, None)
-                .context("Failed to create image view!")
+        buffers::BufferInfo::create_gpu_local_buffer(
+            device,
+            command_pool,
+            submit_queue,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            &image.data,
+            Some(image.size),
+        )
+        .map(|buffer_info| {
+            ImagePropertyType::TextureImage(TextureImageProperty {
+                property,
+                buffer: buffer_info.buffer,
+            })
+        })
+    }
+
+    // pub fn depth_property() -> ImagePropertyType {}
+}
+
+impl ImageType for ImagePropertyType {
+    fn get_property(&self) -> &ImageProperties {
+        match self {
+            ImagePropertyType::TextureImage(p) => &p.property,
+            ImagePropertyType::DepthImage(p) => p,
         }
     }
 
-    pub fn new(
-        device: &device::Device,
+    fn perform_transition(
+        &self,
+        device: &ash::Device,
         command_pool: vk::CommandPool,
         graphics_queue: vk::Queue,
-        data_buffer: buffers::BufferInfo,
-        width: u32,
-        height: u32,
-    ) -> Result<ImageData> {
-        let (image, memory) =
-            ImageData::create_image(device, width, height, vk::MemoryPropertyFlags::DEVICE_LOCAL)?;
-
-        ImageData::copy_buffer_to_image(
-            &device.logical_device,
-            command_pool,
-            graphics_queue,
-            data_buffer.buffer,
-            image,
-            width,
-            height,
-        )?;
-
-        let image_view = ImageData::create_image_view(
-            &device.logical_device,
-            image,
-            vk::Format::R8G8B8A8_UNORM,
-            0,
-        )?;
-
-        Ok(ImageData {
-            image,
-            image_view,
-            memory,
-        })
+        image: vk::Image,
+    ) -> Result<()> {
+        match self {
+            ImagePropertyType::TextureImage(prop) => ImagePropertyType::copy_buffer_to_image(
+                device,
+                command_pool,
+                graphics_queue,
+                prop,
+                image,
+            ),
+            ImagePropertyType::DepthImage(prop) => ImageData::transition_image_layout(
+                device,
+                command_pool,
+                graphics_queue,
+                image,
+                prop.format,
+                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                0,
+            ),
+        }
     }
 }

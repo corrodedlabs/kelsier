@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 use super::device;
+use super::image;
 use super::pipeline;
 use super::queue;
 use super::swapchain;
@@ -444,9 +445,7 @@ pub trait UniformBuffers: Copy {
 }
 
 pub struct DepthBuffer {
-    pub image: vk::Image,
-    pub image_view: vk::ImageView,
-    pub memory: vk::DeviceMemory,
+    pub image: image::ImageData,
 }
 
 impl DepthBuffer {
@@ -467,15 +466,22 @@ impl DepthBuffer {
         )
     }
 
-    // pub fn new(
-    //     instance: &ash::Instance,
-    //     device: device::Device,
-    //     command_pool: vk::CommandPool,
-    //     graphics_queue: vk::Queue,
-    //     swapchain_extent: vk::Extent2D,
-    // ) -> Result<DepthBuffer> {
-    //     let depth_format = DepthBuffer::find_depth_format(instance, device.physical_device)?;
-    // }
+    //     pub fn new(
+    //         instance: &ash::Instance,
+    //         device: device::Device,
+    //         command_pool: vk::CommandPool,
+    //         graphics_queue: vk::Queue,
+    //         swapchain_extent: vk::Extent2D,
+    //     ) -> Result<DepthBuffer> {
+    //         let depth_format = DepthBuffer::find_depth_format(instance, device.physical_device)?;
+
+    //         let image_data = image::ImageData::new(
+    //             &device,
+    //             command_pool,
+    //             graphics_queue,
+    // ,
+    //         );
+    //     }
 }
 
 pub struct BufferDetails<T: UniformBuffers> {

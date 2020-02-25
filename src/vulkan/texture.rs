@@ -55,26 +55,11 @@ impl Texture {
         image_path: &Path,
     ) -> Result<img::ImageData> {
         let image = RawImage::new(image_path)?;
-        let width = image.object.width();
-        let height = image.object.height();
 
-        let staging_buffer = buffers::BufferInfo::create_gpu_local_buffer(
-            device,
-            command_pool,
-            submit_queue,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            &image.data,
-            Some(image.size),
-        )?;
+        let texture_property =
+            img::ImagePropertyType::texture_property(device, command_pool, submit_queue, image)?;
 
-        img::ImageData::new(
-            device,
-            command_pool,
-            submit_queue,
-            staging_buffer,
-            width,
-            height,
-        )
+        img::ImageData::new(device, command_pool, submit_queue, texture_property)
     }
 
     pub fn create_texture_sampler(device: &ash::Device) -> Result<vk::Sampler> {
