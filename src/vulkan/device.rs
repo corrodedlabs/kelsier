@@ -13,7 +13,7 @@ use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 use std::collections::HashSet;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 pub struct Device {
     pub physical_device: vk::PhysicalDevice,

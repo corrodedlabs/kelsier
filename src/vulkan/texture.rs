@@ -9,7 +9,7 @@ use std::path::Path;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 
-use super::{buffers, device, image as img};
+use super::{device, image as img};
 
 // Represents data obtained for raw image file
 pub struct RawImage {

@@ -1,6 +1,4 @@
-use std::ffi::CString;
-
-use ash::version::{DeviceV1_0, InstanceV1_0};
+use ash::version::DeviceV1_0;
 use ash::vk;
 
 use anyhow::anyhow;
@@ -9,7 +7,6 @@ use anyhow::{Context, Result};
 use super::device;
 use super::image;
 use super::pipeline;
-use super::queue;
 use super::swapchain;
 use super::texture;
 
