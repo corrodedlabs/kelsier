@@ -4,12 +4,10 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use ash::{
-    version::DeviceV1_0,
-};
+use ash::version::DeviceV1_0;
 
 use kelsier::{
-    app,shaderc,
+    app, shaderc,
     vulkan::constants::*,
     vulkan::{buffers, device, instance, pipeline, queue, surface, swapchain, sync},
 };
@@ -111,7 +109,8 @@ impl VulkanApp {
         };
 
         let pipeline_detail = pipeline::PipelineDetail::create_graphics_pipeline(
-            &device.logical_device,
+            &self.instance.instance,
+            &device,
             &swapchain,
             shaders,
             app::VERTICES[0],
@@ -121,6 +120,7 @@ impl VulkanApp {
         let uniform_buffer_data = app::UniformBuffer::new(swapchain.extent);
 
         let buffer_details = buffers::BufferDetails::new(
+            &self.instance.instance,
             &device,
             queue.graphics,
             pipeline_detail,

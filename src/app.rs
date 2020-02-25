@@ -1,5 +1,5 @@
-use ash::vk;
 use super::vulkan::{buffers, pipeline};
+use ash::vk;
 
 use memoffset::offset_of;
 
@@ -8,35 +8,55 @@ use cgmath::{Deg, Matrix4, Point3, Vector3};
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct VertexData {
-    pub pos: [f32; 2],
+    pub pos: [f32; 3],
     pub color: [f32; 3],
     pub tex_coord: [f32; 2],
 }
 
-pub const VERTICES: [VertexData; 4] = [
+pub const VERTICES: [VertexData; 8] = [
     VertexData {
-        pos: [-0.75, -0.75],
+        pos: [-0.75, -0.75, 0.0],
         color: [1.0, 0.0, 0.0],
-        tex_coord: [1.0, 0.0],
-    },
-    VertexData {
-        pos: [0.75, -0.75],
-        color: [0.0, 1.0, 0.0],
         tex_coord: [0.0, 0.0],
     },
     VertexData {
-        pos: [0.75, 0.75],
+        pos: [0.75, -0.75, 0.0],
+        color: [0.0, 1.0, 0.0],
+        tex_coord: [1.0, 0.0],
+    },
+    VertexData {
+        pos: [0.75, 0.75, 0.0],
         color: [0.0, 0.0, 1.0],
+        tex_coord: [1.0, 1.0],
+    },
+    VertexData {
+        pos: [-0.75, 0.75, 0.0],
+        color: [1.0, 1.0, 1.0],
         tex_coord: [0.0, 1.0],
     },
     VertexData {
-        pos: [-0.75, 0.75],
-        color: [1.0, 1.0, 1.0],
+        pos: [-0.75, -0.75, -0.75],
+        color: [1.0, 0.0, 0.0],
+        tex_coord: [0.0, 0.0],
+    },
+    VertexData {
+        pos: [0.75, -0.75, -0.75],
+        color: [0.0, 1.0, 0.0],
+        tex_coord: [1.0, 0.0],
+    },
+    VertexData {
+        pos: [0.75, 0.75, -0.75],
+        color: [0.0, 0.0, 1.0],
         tex_coord: [1.0, 1.0],
+    },
+    VertexData {
+        pos: [-0.75, 0.75, -0.75],
+        color: [1.0, 1.0, 1.0],
+        tex_coord: [0.0, 1.0],
     },
 ];
 
-pub const INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
+pub const INDICES: [u32; 12] = [0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
 impl pipeline::VertexData for VertexData {
     fn get_input_binding_description(&self) -> Vec<vk::VertexInputBindingDescription> {
@@ -55,7 +75,7 @@ impl pipeline::VertexData for VertexData {
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 0,
-                format: vk::Format::R32G32_SFLOAT,
+                format: vk::Format::R32G32B32_SFLOAT,
                 offset: offset_of!(VertexData, pos) as u32,
             },
             vk::VertexInputAttributeDescription {

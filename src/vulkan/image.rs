@@ -386,7 +386,15 @@ impl ImagePropertyType {
         })
     }
 
-    // pub fn depth_property() -> ImagePropertyType {}
+    pub fn depth_property(swapchain_extent: vk::Extent2D, format: vk::Format) -> ImagePropertyType {
+        ImagePropertyType::DepthImage(ImageProperties {
+            width: swapchain_extent.width,
+            height: swapchain_extent.height,
+            format: format,
+            usage_flags: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            aspect_flag: vk::ImageAspectFlags::DEPTH,
+        })
+    }
 }
 
 impl ImageType for ImagePropertyType {
