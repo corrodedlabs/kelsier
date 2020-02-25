@@ -5,8 +5,8 @@ use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 use super::device;
+use super::image;
 use super::pipeline;
-use super::queue;
 use super::swapchain;
 use super::texture;
 
@@ -408,7 +408,7 @@ pub trait UniformBuffers: Copy {
 
                 let image_info = [vk::DescriptorImageInfo {
                     sampler: texture_data.sampler,
-                    image_view: texture_data.image_view,
+                    image_view: texture_data.image_data.image_view,
                     image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 }];
 
@@ -441,6 +441,75 @@ pub trait UniformBuffers: Copy {
     }
 }
 
+pub struct DepthBuffer {
+    pub image: image::ImageData,
+    pub format: vk::Format,
+}
+
+impl DepthBuffer {
+    pub fn get_attachment_info(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<(vk::AttachmentDescription, vk::AttachmentReference)> {
+        let format = *DepthBuffer::find_depth_format(instance, physical_device)?;
+
+        let description = vk::AttachmentDescription {
+            format,
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::CLEAR,
+            store_op: vk::AttachmentStoreOp::DONT_CARE,
+            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+            final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            ..Default::default()
+        };
+
+        let reference = vk::AttachmentReference {
+            attachment: 1,
+            layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+
+        Ok((description, reference))
+    }
+
+    pub fn find_depth_format(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<&vk::Format> {
+        device::Device::find_supported_format(
+            instance,
+            physical_device,
+            &[
+                vk::Format::D32_SFLOAT,
+                vk::Format::D32_SFLOAT_S8_UINT,
+                vk::Format::D24_UNORM_S8_UINT,
+            ],
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    }
+
+    pub fn new(
+        instance: &ash::Instance,
+        device: &device::Device,
+        command_pool: vk::CommandPool,
+        graphics_queue: &vk::Queue,
+        swapchain_extent: vk::Extent2D,
+    ) -> Result<DepthBuffer> {
+        let format = DepthBuffer::find_depth_format(instance, device.physical_device)?;
+
+        let depth_property = image::ImagePropertyType::depth_property(swapchain_extent, *format);
+
+        image::ImageData::new(&device, command_pool, *graphics_queue, depth_property).map(|image| {
+            DepthBuffer {
+                image,
+                format: *format,
+            }
+        })
+    }
+}
+
 pub struct BufferDetails<T: UniformBuffers> {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
@@ -452,17 +521,19 @@ pub struct BufferDetails<T: UniformBuffers> {
 }
 
 impl<T: UniformBuffers> BufferDetails<T> {
-    // todo should this fn be in swapchain module?
     fn create_framebuffers(
         device: &ash::Device,
         render_pass: vk::RenderPass,
         image_views: &Vec<vk::ImageView>,
         swapchain_extent: vk::Extent2D,
+        depth_buffer: DepthBuffer,
     ) -> Result<Vec<vk::Framebuffer>> {
+        let depth_image_view = depth_buffer.image.image_view;
+
         image_views
             .iter()
             .map(|&image_view| {
-                let attachments = [image_view];
+                let attachments = [image_view, depth_image_view];
 
                 let framebuffer_info = vk::FramebufferCreateInfo {
                     render_pass,
@@ -483,11 +554,14 @@ impl<T: UniformBuffers> BufferDetails<T> {
             .collect()
     }
 
-    fn create_command_pool(
-        device: &ash::Device,
-        queue_families: &queue::FamilyIndices,
-    ) -> Result<vk::CommandPool> {
-        let queue_index = queue_families
+    fn create_command_pool(device: &device::Device) -> Result<vk::CommandPool> {
+        let device::Device {
+            logical_device,
+            family_indices,
+            ..
+        } = device;
+
+        let queue_index = family_indices
             .graphics
             .ok_or_else(|| anyhow!("graphics family index not present"))?;
 
@@ -497,7 +571,7 @@ impl<T: UniformBuffers> BufferDetails<T> {
         };
 
         unsafe {
-            device
+            logical_device
                 .create_command_pool(&command_pool_info, None)
                 .context("Failed to create command pool!")
         }
@@ -520,11 +594,19 @@ impl<T: UniformBuffers> BufferDetails<T> {
             command_pool,
             framebuffers.len() as u32,
             |i, command_buffer| {
-                let clear_values = [vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
+                let clear_values = [
+                    vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 1.0],
+                        },
                     },
-                }];
+                    vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    },
+                ];
 
                 let framebuffer = framebuffers[i];
 
@@ -575,7 +657,7 @@ impl<T: UniformBuffers> BufferDetails<T> {
                     );
 
                     // todo replace hard coded 6 with with index_buffer data size
-                    device.cmd_draw_indexed(command_buffer, 6u32, 1, 0, 0, 0);
+                    device.cmd_draw_indexed(command_buffer, 12u32, 1, 0, 0, 0);
 
                     device.cmd_end_render_pass(command_buffer);
                 }
@@ -584,6 +666,7 @@ impl<T: UniformBuffers> BufferDetails<T> {
     }
 
     pub fn new(
+        instance: &ash::Instance,
         device: &device::Device,
         graphics_queue: vk::Queue,
         pipeline: pipeline::PipelineDetail,
@@ -601,15 +684,7 @@ impl<T: UniformBuffers> BufferDetails<T> {
             swapchain_details.image_views.len()
         );
 
-        let framebuffers = BufferDetails::<T>::create_framebuffers(
-            logical_device,
-            render_pass,
-            &swapchain_details.image_views,
-            swapchain_details.extent,
-        )?;
-
-        let command_pool =
-            BufferDetails::<T>::create_command_pool(logical_device, &device.family_indices)?;
+        let command_pool = BufferDetails::<T>::create_command_pool(device)?;
 
         let vertex_buffer =
             BufferInfo::create_vertex_buffer(device, command_pool, graphics_queue, &vertex_data)?;
@@ -619,6 +694,22 @@ impl<T: UniformBuffers> BufferDetails<T> {
             command_pool,
             graphics_queue,
             index_data.as_slice(),
+        )?;
+
+        let depth_buffer = DepthBuffer::new(
+            instance,
+            device,
+            command_pool,
+            &graphics_queue,
+            swapchain_details.extent,
+        )?;
+
+        let framebuffers = BufferDetails::<T>::create_framebuffers(
+            logical_device,
+            render_pass,
+            &swapchain_details.image_views,
+            swapchain_details.extent,
+            depth_buffer,
         )?;
 
         let uniform_buffers = (0..framebuffers.len())

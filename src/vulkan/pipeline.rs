@@ -7,6 +7,8 @@ use anyhow::{Context, Result};
 
 use crate::shaderc;
 
+use super::buffers;
+use super::device;
 use super::swapchain;
 
 pub struct PipelineDetail {
@@ -37,7 +39,8 @@ impl PipelineDetail {
     }
 
     fn create_render_pass(
-        device: &ash::Device,
+        instance: &ash::Instance,
+        device: &device::Device,
         surface_format: vk::Format,
     ) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription {
@@ -57,14 +60,18 @@ impl PipelineDetail {
             layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         };
 
+        let (depth_buffer_attachment, depth_buffer_attachment_ref) =
+            buffers::DepthBuffer::get_attachment_info(instance, device.physical_device)?;
+
         let subpasses = [vk::SubpassDescription {
             color_attachment_count: 1,
             p_color_attachments: &color_attachment_ref,
+            p_depth_stencil_attachment: &depth_buffer_attachment_ref,
             pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
             ..Default::default()
         }];
 
-        let render_pass_attachments = [color_attachment];
+        let render_pass_attachments = [color_attachment, depth_buffer_attachment];
 
         let subpass_dependencies = [vk::SubpassDependency {
             src_subpass: vk::SUBPASS_EXTERNAL,
@@ -87,6 +94,7 @@ impl PipelineDetail {
 
         unsafe {
             device
+                .logical_device
                 .create_render_pass(&renderpass_create_info, None)
                 .context("failed to create render pass!")
         }
@@ -126,7 +134,8 @@ impl PipelineDetail {
     }
 
     pub fn create_graphics_pipeline(
-        device: &ash::Device,
+        instance: &ash::Instance,
+        device: &device::Device,
         swapchain: &swapchain::SwapchainDetails,
         shaders: shaderc::ShaderSource,
         vertex_data: impl VertexData,
@@ -139,9 +148,11 @@ impl PipelineDetail {
         println!("shaders compiled");
 
         let vert_shader_module =
-            PipelineDetail::create_shader_module(device, compiled_shaders.vertex)?;
-        let frag_shader_module =
-            PipelineDetail::create_shader_module(device, compiled_shaders.fragment)?;
+            PipelineDetail::create_shader_module(&device.logical_device, compiled_shaders.vertex)?;
+        let frag_shader_module = PipelineDetail::create_shader_module(
+            &device.logical_device,
+            compiled_shaders.fragment,
+        )?;
 
         let main_function_name = CString::new("main").context("invalid fn name")?;
 
@@ -233,11 +244,11 @@ impl PipelineDetail {
             s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
             p_next: ::std::ptr::null(),
             flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
-            depth_test_enable: vk::FALSE,
-            depth_write_enable: vk::FALSE,
-            depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
-            depth_bounds_test_enable: vk::FALSE,
-            stencil_test_enable: vk::FALSE,
+            depth_test_enable: vk::TRUE,
+            depth_write_enable: vk::TRUE,
+            depth_compare_op: vk::CompareOp::LESS,
+            depth_bounds_test_enable: vk::TRUE,
+            stencil_test_enable: vk::TRUE,
             front: stencil_state,
             back: stencil_state,
             max_depth_bounds: 1.0,
@@ -265,7 +276,7 @@ impl PipelineDetail {
         };
 
         let descriptor_set_layout: vk::DescriptorSetLayout =
-            PipelineDetail::create_descriptor_set_layout(device)?;
+            PipelineDetail::create_descriptor_set_layout(&device.logical_device)?;
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo {
             set_layout_count: 1,
             p_set_layouts: [descriptor_set_layout].as_ptr(),
@@ -274,11 +285,12 @@ impl PipelineDetail {
 
         let pipeline_layout = unsafe {
             device
+                .logical_device
                 .create_pipeline_layout(&pipeline_layout_info, None)
                 .context("failed to create pipeline layout")
         }?;
 
-        let render_pass = PipelineDetail::create_render_pass(device, surface_format)?;
+        let render_pass = PipelineDetail::create_render_pass(instance, &device, surface_format)?;
 
         let pipeline_info = vk::GraphicsPipelineCreateInfo {
             stage_count: shader_stages.len() as u32,
@@ -299,14 +311,19 @@ impl PipelineDetail {
         println!("going to create pipelines");
         let pipelines = unsafe {
             device
+                .logical_device
                 .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
                 //todo handle this with anyhow! somehow
                 .expect("failed to create pipelines")
         };
 
         unsafe {
-            device.destroy_shader_module(vert_shader_module, None);
-            device.destroy_shader_module(frag_shader_module, None);
+            device
+                .logical_device
+                .destroy_shader_module(vert_shader_module, None);
+            device
+                .logical_device
+                .destroy_shader_module(frag_shader_module, None);
         }
 
         Ok(PipelineDetail {
