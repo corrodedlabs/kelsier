@@ -15,6 +15,7 @@ shaderc = "0.6"
 memoffset = "0.5"
 cgmath = "0.17.0"
 image = "0.23.0"
+assimp = "0.3.1"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]

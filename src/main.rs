@@ -7,7 +7,7 @@ use winit::{
 use ash::version::DeviceV1_0;
 
 use kelsier::{
-    app, shaderc,
+    app, assimp, shaderc,
     vulkan::constants::*,
     vulkan::{buffers, device, instance, pipeline, queue, surface, swapchain, sync},
 };
