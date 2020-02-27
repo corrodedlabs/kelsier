@@ -7,11 +7,12 @@ use winit::{
 use ash::version::DeviceV1_0;
 
 use kelsier::{
-    app, assimp, shaderc,
+    app, assimp as a, shaderc,
     vulkan::constants::*,
     vulkan::{buffers, device, instance, pipeline, queue, surface, swapchain, sync},
 };
 
+use anyhow::anyhow;
 use anyhow::{Context, Result};
 
 struct VulkanApp {
@@ -146,6 +147,11 @@ fn main() -> Result<()> {
     let app = VulkanApp::new()?;
     let event_loop = EventLoop::new();
     let window = VulkanApp::init_window(&event_loop).expect("cannot create window");
+
+    let mut importer = assimp::Importer::new();
+
+    let k = std::path::Path::new("models/teapot.obj");
+    let model_data = a::ModelData::load_model(&mut importer, k.clone()).map_err(|s| anyhow!(s))?;
 
     let frame = match app.setup(&window) {
         Ok(obj) => obj,

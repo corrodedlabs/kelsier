@@ -3,7 +3,9 @@ use assimp::Importer;
 use anyhow::anyhow;
 use anyhow::{Context, Error, Result};
 
-struct ModelData {
+use std::marker::PhantomData;
+
+pub struct ModelData {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub uv: [f32; 2],
@@ -47,34 +49,29 @@ impl ModelData {
             .collect()
     }
 
-    pub fn load_model(file: &std::path::Path) -> Result<Vec<ModelData>> {
-        let file_name = file
-            .to_str()
-            .context("cannot convert file path to string")?;
+    pub fn load_model<'a>(
+        importer: &'a mut Importer,
+        file: &std::path::Path,
+    ) -> std::result::Result<Vec<ModelData>, &'a str> {
+        let file_name = file.to_str().unwrap();
 
         let scale = 1.0;
 
-        {
-            let mut importer = Importer::new();
-            importer.flip_winding_order(true);
-            importer.generate_normals(|x| x.enable = true);
-            importer.triangulate(true);
-            importer.pre_transform_vertices(|x| {
-                x.enable = true;
-                x.normalize = true;
-            });
+        // let mut importer = Importer::new();
+        importer.flip_winding_order(true);
+        importer.generate_normals(|x| x.enable = true);
+        importer.triangulate(true);
+        importer.pre_transform_vertices(|x| {
+            x.enable = true;
+            x.normalize = true;
+        });
 
-            importer
-                .read_file(file_name)
-                .map_err(|s| anyhow!(s))
-                .map(|scene| {
-                    scene
-                        .mesh_iter()
-                        .by_ref()
-                        .map(ModelData::create_buffers)
-                        .flatten()
-                        .collect()
-                })
-        }
+        importer.read_file(file_name).map(|scene| {
+            scene
+                .mesh_iter()
+                .map(ModelData::create_buffers)
+                .flatten()
+                .collect()
+        })
     }
 }
