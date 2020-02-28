@@ -155,6 +155,10 @@
     (syntax-rules ()
       ((_ ptr) (ftype-ref int () ptr))))
 
+  (define-syntax read-unsigned
+    (syntax-rules ()
+      ((_ ptr) (ftype-ref unsigned () ptr))))
+
   (define-syntax read-unsigned-32
     (syntax-rules ()
       ((_ ptr) (ftype-ref unsigned-32 () ptr))))
@@ -332,9 +336,9 @@
       (define array-type?
 	(lambda (type)
 	  (and (list? type)
-	     (fx=? (length type) 3)
-	     (equal? 'array (car type))
-	     (number? (cadr type)))))
+	       (fx=? (length type) 3)
+	       (equal? 'array (car type))
+	       (number? (cadr type)))))
 
       (define scalar-type '(unsigned-32 int uptr double-float single-float unsigned ai-real))
 
@@ -489,7 +493,7 @@
 				      (raise (ffi-condition "invalid pointer" ptr lambda-name)))))))
 
 			 ((and (not (scalar-type? type-sym))
-			     (not (list? type-sym))) #f)
+			       (not (list? type-sym))) #f)
 
 			 ;; scalar / pointer getters
 			 (else (construct-ptr-lambdas #'name (list #'name)))))))
@@ -507,7 +511,7 @@
 	   (let ((member-details (filter identity
 					 (map (lambda (type)
 						(let ((members (and (identifier? type)
-								  (lookup type #'struct-info))))
+								    (lookup type #'struct-info))))
 						  (cond
 						   (members
 						    (cons (syntax->datum type) members))

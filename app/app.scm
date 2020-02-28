@@ -34,6 +34,8 @@
 
 (define-ftype ai-real double-float)
 
+(define-collection-lambdas unsigned)
+
 (define-foreign-struct vector3
   ((x ai-real)
    (y ai-real)
@@ -63,6 +65,17 @@
    (b ai-real)
    (a ai-real)))
 
+;; A single face in a mesh, referring to multiple vertices.
+;; If mNumIndices is 3, we call the face 'triangle', for mNumIndices > 3
+;; it's called 'polygon' (hey, that's just a definition!).
+
+(define-foreign-struct face
+  ((num-indices unsigned)
+   (indices (* unsigned))))
+
+(define-collection-lambdas face)
+
+
 (define-ftype aabb
   (struct (min vector3)
 	  (max vector3)))
@@ -80,7 +93,7 @@
    (colors (array #x8 (* color4)))
    (texture-coords (array #x8 (* vector3)))
    (num-uv-component (array #x8 unsigned))
-   (faces uptr)
+   (faces (* face))
    (num-bones unsigned)
    (bones uptr)
    (material-index unsigned)
@@ -154,16 +167,6 @@
     (list (car vec3-list) (* -1.0 (cadr vec3-list)) (caddr vec3-list))))
 
 
-(define scene-ptr
-  (import_file "../models/teapot.obj"
-	       (bitwise-ior flip-winding-order triangulate pretransform-vertices)))
-
-
-;; just reading the first mesh
-(define mesh-ptr
-  (make-ftype-pointer mesh (foreign-ref 'uptr (scene-meshes scene-ptr) 0)))
-
-
 ;; record to collect vertex buffer data
 (define-record-type vertex-buffer-data (fields vertices normals uv colors))
 
@@ -192,9 +195,47 @@
 
   (make-vertex-buffer-data vertices normals texture-coords #f))
 
-;; convert mesh ptr to buffer data record
-(define buf-data (mesh-ptr->vertex-buffer-data mesh-ptr))
+
+;; data for index buffer
+(define mesh-ptr->indices
+  (lambda (mesh-ptr)
+    
+    (define concatenate (lambda (xs) (apply append xs)))
+    
+    (concatenate (face-pointer-map
+		  (lambda (face-ptr)
+		    (unsigned-pointer-map (lambda (ptr) (read-unsigned ptr))
+					  (make-array-pointer (face-num-indices face-ptr)
+							      (face-indices face-ptr)
+							      'unsigned)))
+		  (make-array-pointer (mesh-num-faces mesh-ptr)
+				      (mesh-faces mesh-ptr)
+				      'face)))))
 
 
+;; record to collect the complete data required from assimp
+(define-record-type model-data
+  ;; vertex-data: contains data recorded per vertex type record<vertex-buffer-data>
+  ;; indices: list containing indices from the mesh
+  (fields vertex-data indices))
+
+;; fn to import a model
+(define import-model
+  (lambda (model)
+    (define scene-ptr
+      (import_file model
+		   (bitwise-ior flip-winding-order triangulate pretransform-vertices)))
 
 
+    ;; just reading the first mesh
+    (define mesh-ptr
+      (make-ftype-pointer mesh (foreign-ref 'uptr (scene-meshes scene-ptr) 0)))
+
+    (let ((vertex-data (mesh-ptr->vertex-buffer-data mesh-ptr))
+	  (indices (mesh-ptr->indices mesh-ptr)))
+      (make-model-data vertex-data indices))))
+
+
+;; test
+
+(define model-data (import-model "../models/teapot.obj"))
