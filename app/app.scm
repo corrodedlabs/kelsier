@@ -39,6 +39,10 @@
    (y ai-real)
    (z ai-real)))
 
+;; defines collection fns like
+;; vector3-pointer-map to work on the array pointers
+(define-collection-lambdas vector3)
+
 (define-foreign-struct color4
   ((r ai-real)
    (g ai-real)
@@ -89,8 +93,7 @@
    (cameras  uptr)
    (metadata  uptr)))
 
-(define-enum-ftype
-  ai-process-steps
+(define-enum-ftype ai-process-steps
   (calc-tangent-space #x1)
   (join-identical-vertices #x2)
   (make-left-handed #x4)
@@ -131,11 +134,20 @@
 
 ;; run
 
-(define scene
+(define scene-ptr
   (import_file "../models/teapot.obj"
 	       (bitwise-ior flip-winding-order triangulate pretransform-vertices)))
 
-(ftype-pointer->sexpr (make-ftype-pointer mesh (foreign-ref 'uptr (scene-meshes scene) 0)))
+(define mesh-ptr
+  (make-ftype-pointer mesh (foreign-ref 'uptr (scene-meshes scene-ptr) 0)))
+
+(define vertices 
+  (vector3-pointer-map (lambda (v) (list (vector3-x v)
+				    (vector3-y v)
+				    (vector3-z v)))
+		       (make-array-pointer (mesh-num-vertices mesh-ptr)
+					   (mesh-vertices mesh-ptr)
+					   'vector3)))
 
 
 

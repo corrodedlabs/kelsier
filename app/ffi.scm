@@ -177,7 +177,7 @@
     (syntax-rules ()
       ((_ type) (make-ftype-pointer type 0))))
 
-  (meta define-syntax define-ptr-lambda 
+  (meta trace-define-syntax define-ptr-lambda 
 	(syntax-rules ()
 	  ((_ lambda-name struct-name member-spec f)
 	   (define lambda-name
@@ -336,7 +336,7 @@
 	     (equal? 'array (car type))
 	     (number? (cadr type)))))
 
-      (define scalar-type '(unsigned-32 int uptr double-float single-float unsigned))
+      (define scalar-type '(unsigned-32 int uptr double-float single-float unsigned ai-real))
 
       (define scalar-type?
 	(lambda (type) (and (symbol? type) (member type scalar-type))))
