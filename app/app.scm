@@ -43,6 +43,20 @@
 ;; vector3-pointer-map to work on the array pointers
 (define-collection-lambdas vector3)
 
+;; other useful utilities for working with vector3 ptrs
+
+(define vector3-ptr->list
+  (lambda (ptr)
+    (list (vector3-x ptr) (vector3-y ptr) (vector3-z ptr))))
+
+
+(define vector3-array-ptr->list
+  (lambda (array-ptr)
+    (and (array-pointer? array-ptr) (vector3-pointer-map vector3-ptr->list array-ptr))))
+
+
+;; colors
+
 (define-foreign-struct color4
   ((r ai-real)
    (g ai-real)
@@ -134,20 +148,53 @@
 
 ;; run
 
+;; Vulkan uses a right-handed NDC (contrary to OpenGL), so simply flip Y-Axis
+(define flip-vertices
+  (lambda (vec3-list)
+    (list (car vec3-list) (* -1.0 (cadr vec3-list)) (caddr vec3-list))))
+
+
 (define scene-ptr
   (import_file "../models/teapot.obj"
 	       (bitwise-ior flip-winding-order triangulate pretransform-vertices)))
 
+
+;; just reading the first mesh
 (define mesh-ptr
   (make-ftype-pointer mesh (foreign-ref 'uptr (scene-meshes scene-ptr) 0)))
 
-(define vertices 
-  (vector3-pointer-map (lambda (v) (list (vector3-x v)
-				    (vector3-y v)
-				    (vector3-z v)))
-		       (make-array-pointer (mesh-num-vertices mesh-ptr)
-					   (mesh-vertices mesh-ptr)
-					   'vector3)))
+
+;; record to collect vertex buffer data
+(define-record-type vertex-buffer-data (fields vertices normals uv colors))
+
+(define (mesh-ptr->vertex-buffer-data mesh-ptr)
+  
+  (define num-vertices (mesh-num-vertices mesh-ptr))
+
+  (define vertices
+    (map flip-vertices
+	 (vector3-array-ptr->list (make-array-pointer num-vertices
+						      (mesh-vertices mesh-ptr)
+						      'vector3))))
+
+
+  (define normals
+    (vector3-array-ptr->list (make-array-pointer num-vertices (mesh-normals mesh-ptr) 'vector3)))
+
+
+  ;; Texture coordinates may have multiple channels, we only use the first we find
+  (define texture-coords-channel
+    (find (lambda (ptr)
+	    (not (ftype-pointer-null? ptr))) (mesh-texture-coords mesh-ptr)))
+
+  (define texture-coords
+    (vector3-array-ptr->list (make-array-pointer num-vertices texture-coords-channel 'vector3)))
+
+  (make-vertex-buffer-data vertices normals texture-coords #f))
+
+;; convert mesh ptr to buffer data record
+(define buf-data (mesh-ptr->vertex-buffer-data mesh-ptr))
+
 
 
 
