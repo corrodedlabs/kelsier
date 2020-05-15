@@ -135,7 +135,7 @@ impl VulkanApp {
 
         // For some reason frames in flight needs to be set to 3 as only 3 uniform buffers are being created in macOS.
         //TODO: Need to fix this
-        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 10)
+        sync::Objects::new(device.logical_device, queue, swapchain, buffer_details, 5)
     }
 
     pub fn new() -> Result<VulkanApp> {
@@ -150,8 +150,8 @@ fn main() -> Result<()> {
 
     let mut importer = assimp::Importer::new();
 
-    let k = std::path::Path::new("models/teapot.obj");
-    let model_data = a::ModelData::load_model(&mut importer, k.clone()).map_err(|s| anyhow!(s))?;
+    // let k = std::path::Path::new("models/teapot.obj");
+    // let model_data = a::ModelData::load_model(&mut importer, k.clone()).map_err(|s| anyhow!(s))?;
 
     let frame = match app.setup(&window) {
         Ok(obj) => obj,
