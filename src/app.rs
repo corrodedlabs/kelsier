@@ -130,6 +130,7 @@ impl buffers::UniformBuffers for UniformBuffer {
     type Data = UniformBuffer;
 
     fn update(&mut self, delta_time: f32) -> () {
+        println!("delte time {}", delta_time);
         self.model = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Deg(90.0) * delta_time)
             * self.model;
     }

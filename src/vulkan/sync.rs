@@ -116,7 +116,7 @@ impl<T: buffers::UniformBuffers> Objects<T> {
 
     fn submit_buffers_to_queue(sync_objects: &Objects<T>, acquired_image_index: u32) -> Result<()> {
         let current_frame = sync_objects.frame_state.current_frame as usize;
-        println!("submitting buffer for frame: {}", current_frame);
+        // println!("submitting buffer for frame: {}", current_frame);
 
         let command_buffer = sync_objects
             .buffers
@@ -170,7 +170,7 @@ impl<T: buffers::UniformBuffers> Objects<T> {
                 )
                 .context("failed to submit to graphics queue")
         }?;
-        println!("buffer submitted to graphics queue");
+        // println!("buffer submitted to graphics queue");
 
         let swapchains = [sync_objects.swapchain_details.swapchain];
 
@@ -202,7 +202,7 @@ impl<T: buffers::UniformBuffers> Objects<T> {
     }
 
     pub fn draw_next_frame(&mut self) -> Result<()> {
-        println!("drawing frame");
+        // println!("drawing frame");
 
         let in_flight_fence = self
             .in_flight_fences
@@ -236,12 +236,12 @@ impl<T: buffers::UniformBuffers> Objects<T> {
                 _ => anyhow!(format!("failed to acquire swapchain images: {}", err)),
             }
         })?;
-        println!(
-            "acquired image index is {}, current_frame is {}",
-            acquired_image_index, self.frame_state.current_frame,
-        );
+        // println!(
+        //     "acquired image index is {}, current_frame is {}",
+        //     acquired_image_index, self.frame_state.current_frame,
+        // );
 
-        println!("images in flight: {:?}", self.frame_state.images_in_flight);
+        // println!("images in flight: {:?}", self.frame_state.images_in_flight);
 
         // updating uniform buffers
         let delta_time = self.start_time.elapsed();
@@ -267,10 +267,10 @@ impl<T: buffers::UniformBuffers> Objects<T> {
 
         image_in_flight
             .map(|image_in_flight| unsafe {
-                println!(
-                    "waiting for fence; acquired image index is {} ",
-                    acquired_image_index
-                );
+                // println!(
+                //     "waiting for fence; acquired image index is {} ",
+                //     acquired_image_index
+                // );
                 self.device
                     .wait_for_fences(&[image_in_flight], true, std::u64::MAX)
                     .context("failed to wait for in flight fence")

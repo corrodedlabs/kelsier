@@ -110,6 +110,7 @@ impl ImageData {
                 height: image_properties.height,
                 depth: 1,
             },
+            mip_levels: 1,
             ..Default::default()
         };
 
@@ -230,7 +231,7 @@ impl ImageData {
             subresource_range: vk::ImageSubresourceRange {
                 aspect_mask: image_property.aspect_flag,
                 base_mip_level: 0,
-                level_count: mip_levels,
+                level_count: 1,
                 base_array_layer: 0,
                 layer_count: 1,
             },
@@ -428,7 +429,7 @@ impl ImageType for ImagePropertyType {
                 prop.format,
                 vk::ImageLayout::UNDEFINED,
                 vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                0,
+                1,
             ),
         }
     }

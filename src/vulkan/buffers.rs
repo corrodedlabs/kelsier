@@ -352,14 +352,20 @@ pub trait UniformBuffers: Copy {
         device: &ash::Device,
         pool_size_count: u32,
     ) -> Result<vk::DescriptorPool> {
-        let pool_size = vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: pool_size_count,
-        };
+        let pool_size = vec![
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: pool_size_count,
+            },
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: pool_size_count,
+            },
+        ];
 
         let pool_info = vk::DescriptorPoolCreateInfo {
-            pool_size_count: 1,
-            p_pool_sizes: &pool_size,
+            pool_size_count: pool_size.len() as u32,
+            p_pool_sizes: pool_size.as_ptr(),
             max_sets: pool_size_count,
             ..Default::default()
         };
